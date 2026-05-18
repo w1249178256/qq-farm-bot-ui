@@ -80,6 +80,16 @@ export interface QrLoginConfig {
   apiDomain: string
 }
 
+export interface AiPlannerConfig {
+  enabled: boolean
+  provider: 'claude' | 'openai' | 'custom'
+  baseUrl: string
+  apiKey: string
+  model: string
+  maxTokens: number
+  timeoutMs: number
+}
+
 export interface RuntimeClientDeviceInfo {
   sys_software: string
   network: string
@@ -114,6 +124,7 @@ export interface SettingsState {
   offlineReminder: OfflineConfig
   qrLogin: QrLoginConfig
   runtimeClient: RuntimeClientConfig
+  aiPlanner: AiPlannerConfig | null
 }
 
 export const useSettingStore = defineStore('setting', () => {
@@ -152,6 +163,7 @@ export const useSettingStore = defineStore('setting', () => {
         device_id: 'iPhone X<iPhone18,3>',
       },
     },
+    aiPlanner: null,
   })
   const loading = ref(false)
 
@@ -287,6 +299,59 @@ export const useSettingStore = defineStore('setting', () => {
     }
   }
 
+  async function fetchAiPlannerConfig() {
+    loading.value = true
+    try {
+      const { data } = await api.get('/api/ai-planner/config')
+      if (data && data.ok && data.data) {
+        settings.value.aiPlanner = data.data
+      }
+      return data
+    }
+    finally {
+      loading.value = false
+    }
+  }
+
+  async function saveAiPlannerConfig(config: AiPlannerConfig) {
+    loading.value = true
+    try {
+      const { data } = await api.post('/api/ai-planner/config', config)
+      if (data && data.ok) {
+        settings.value.aiPlanner = data.data || config
+        return { ok: true }
+      }
+      return { ok: false, error: '保存失败' }
+    }
+    finally {
+      loading.value = false
+    }
+  }
+
+  async function triggerAiPlanner(accountId: string) {
+    try {
+      const { data } = await api.post('/api/ai-planner/trigger', {}, {
+        headers: { 'x-account-id': accountId },
+      })
+      return data
+    }
+    catch (e: any) {
+      return { ok: false, error: e?.message || '请求失败' }
+    }
+  }
+
+  async function fetchAiPlannerStatus(accountId: string) {
+    try {
+      const { data } = await api.get('/api/ai-planner/status', {
+        headers: { 'x-account-id': accountId },
+      })
+      return data
+    }
+    catch (e: any) {
+      return { ok: false, error: e?.message || '请求失败' }
+    }
+  }
+
   async function changeAdminPassword(oldPassword: string, newPassword: string) {
     loading.value = true
     try {
@@ -298,5 +363,5 @@ export const useSettingStore = defineStore('setting', () => {
     }
   }
 
-  return { settings, loading, fetchSettings, saveSettings, saveOfflineConfig, saveQrLoginConfig, saveRuntimeClientConfig, changeAdminPassword }
+  return { settings, loading, fetchSettings, saveSettings, saveOfflineConfig, saveQrLoginConfig, saveRuntimeClientConfig, changeAdminPassword, fetchAiPlannerConfig, saveAiPlannerConfig, triggerAiPlanner, fetchAiPlannerStatus }
 })

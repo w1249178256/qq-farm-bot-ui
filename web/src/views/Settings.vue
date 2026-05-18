@@ -28,6 +28,18 @@ const offlineSaving = ref(false)
 const offlineTesting = ref(false)
 const qrSaving = ref(false)
 const runtimeClientSaving = ref(false)
+const aiPlannerSaving = ref(false)
+const aiPlannerTriggering = ref(false)
+const aiPlannerStatus = ref<any>(null)
+const localAiPlanner = ref({
+  enabled: false,
+  provider: 'claude' as 'claude' | 'openai' | 'custom',
+  baseUrl: 'https://api.anthropic.com',
+  apiKey: '',
+  model: 'claude-opus-4-7',
+  maxTokens: 1024,
+  timeoutMs: 30000,
+})
 
 // 密码认证相关状态
 const passwordAuthDisabled = ref(false)
@@ -536,6 +548,9 @@ function syncLocalSettings() {
     }
     if (settings.value.runtimeClient) {
       localRuntimeClient.value = JSON.parse(JSON.stringify(settings.value.runtimeClient))
+    }
+    if (settings.value.aiPlanner) {
+      localAiPlanner.value = JSON.parse(JSON.stringify(settings.value.aiPlanner))
     }
   }
 }
@@ -1125,6 +1140,51 @@ async function handleSaveRuntimeClient() {
   }
   finally {
     runtimeClientSaving.value = false
+  }
+}
+
+async function handleSaveAiPlanner() {
+  aiPlannerSaving.value = true
+  try {
+    const res = await settingStore.saveAiPlannerConfig(localAiPlanner.value as any)
+    if (res && res.ok) {
+      showAlert('AI 规划配置已保存')
+    }
+    else {
+      showAlert(`保存失败: ${(res as any)?.error || '未知错误'}`, 'danger')
+    }
+  }
+  catch (e: any) {
+    showAlert(`保存失败: ${e?.response?.data?.error || e?.message || '请求失败'}`, 'danger')
+  }
+  finally {
+    aiPlannerSaving.value = false
+  }
+}
+
+async function handleTriggerAiPlanner() {
+  if (!currentAccountId.value)
+    return
+  aiPlannerTriggering.value = true
+  try {
+    const res = await settingStore.triggerAiPlanner(currentAccountId.value)
+    if (res && res.ok) {
+      showAlert('AI 规划已触发')
+      setTimeout(async () => {
+        const statusRes = await settingStore.fetchAiPlannerStatus(currentAccountId.value!)
+        if (statusRes && statusRes.ok)
+          aiPlannerStatus.value = statusRes.data
+      }, 1000)
+    }
+    else {
+      showAlert(`触发失败: ${res?.error || '未知错误'}`, 'danger')
+    }
+  }
+  catch (e: any) {
+    showAlert(`触发失败: ${e?.response?.data?.error || e?.message || '请求失败'}`, 'danger')
+  }
+  finally {
+    aiPlannerTriggering.value = false
   }
 }
 
@@ -1789,6 +1849,98 @@ async function handleTestOffline() {
               @click="handleSaveRuntimeClient"
             >
               保存运行时连接配置
+            </BaseButton>
+          </div>
+        </div>
+
+        <!-- AI Planner Header -->
+        <div class="border-b border-t bg-gray-50/50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
+          <h3 class="flex items-center gap-2 text-base text-gray-900 font-bold dark:text-gray-100">
+            <div class="i-carbon-machine-learning-model" />
+            AI 任务规划
+          </h3>
+        </div>
+
+        <!-- AI Planner Content -->
+        <div class="p-4 space-y-3">
+          <BaseSwitch
+            v-model="localAiPlanner.enabled"
+            label="启用 AI 任务规划"
+          />
+
+          <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <BaseSelect
+              v-model="localAiPlanner.provider"
+              label="AI 提供商"
+              :options="[
+                { label: 'Claude (Anthropic)', value: 'claude' },
+                { label: 'OpenAI', value: 'openai' },
+                { label: '自定义', value: 'custom' },
+              ]"
+            />
+            <BaseInput
+              v-model="localAiPlanner.model"
+              label="模型名称"
+              type="text"
+              placeholder="例如: claude-opus-4-7"
+            />
+          </div>
+
+          <BaseInput
+            v-model="localAiPlanner.baseUrl"
+            label="API 地址"
+            type="text"
+            placeholder="https://api.anthropic.com"
+          />
+
+          <BaseInput
+            v-model="localAiPlanner.apiKey"
+            label="API Key"
+            type="password"
+            placeholder="sk-..."
+          />
+
+          <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <BaseInput
+              v-model.number="localAiPlanner.maxTokens"
+              label="最大 Token 数"
+              type="number"
+              min="256"
+              max="32768"
+            />
+            <BaseInput
+              v-model.number="localAiPlanner.timeoutMs"
+              label="超时时间 (ms)"
+              type="number"
+              min="5000"
+              max="120000"
+            />
+          </div>
+
+          <div v-if="aiPlannerStatus" class="rounded bg-blue-50 p-3 text-xs text-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
+            <div class="mb-1 font-medium">
+              上次规划状态
+            </div>
+            <pre class="whitespace-pre-wrap break-all">{{ JSON.stringify(aiPlannerStatus, null, 2) }}</pre>
+          </div>
+
+          <div class="flex justify-end gap-2 pt-1">
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              :loading="aiPlannerTriggering"
+              :disabled="!localAiPlanner.enabled || !currentAccountId"
+              @click="handleTriggerAiPlanner"
+            >
+              立即规划
+            </BaseButton>
+            <BaseButton
+              variant="primary"
+              size="sm"
+              :loading="aiPlannerSaving"
+              @click="handleSaveAiPlanner"
+            >
+              保存 AI 规划配置
             </BaseButton>
           </div>
         </div>
