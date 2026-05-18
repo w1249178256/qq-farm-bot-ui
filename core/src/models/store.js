@@ -50,6 +50,15 @@ const DEFAULT_RUNTIME_CLIENT = {
         device_id: (BASE_CONFIG.device_info && BASE_CONFIG.device_info.device_id) ? BASE_CONFIG.device_info.device_id : 'iPhone X<iPhone18,3>',
     },
 };
+const DEFAULT_AI_PLANNER_CONFIG = {
+    enabled: false,
+    provider: 'claude',
+    baseUrl: 'https://api.anthropic.com',
+    apiKey: '',
+    model: 'claude-opus-4-7',
+    maxTokens: 1024,
+    timeoutMs: 30000,
+};
 // ============ 全局配置 ============
 const DEFAULT_ACCOUNT_CONFIG = {
     automation: {
@@ -130,6 +139,7 @@ const globalConfig = {
     offlineReminder: { ...DEFAULT_OFFLINE_REMINDER },
     qrLogin: { ...DEFAULT_QR_LOGIN },
     runtimeClient: { ...DEFAULT_RUNTIME_CLIENT, device_info: { ...DEFAULT_RUNTIME_CLIENT.device_info } },
+    aiPlanner: { ...DEFAULT_AI_PLANNER_CONFIG },
     adminPasswordHash: '',
     disablePasswordAuth: false,
 };
@@ -314,6 +324,43 @@ function setRuntimeClientConfig(cfg) {
     };
     saveGlobalConfig();
     return getRuntimeClientConfig();
+}
+function normalizeAiPlannerConfig(input) {
+    const src = (input && typeof input === 'object') ? input : {};
+    const VALID_PROVIDERS = new Set(['claude', 'openai', 'custom']);
+    const provider = VALID_PROVIDERS.has(String(src.provider || '').trim())
+        ? String(src.provider).trim()
+        : DEFAULT_AI_PLANNER_CONFIG.provider;
+    const baseUrl = String(src.baseUrl || '').trim() || DEFAULT_AI_PLANNER_CONFIG.baseUrl;
+    const apiKey = String(src.apiKey || '').trim();
+    const model = String(src.model || '').trim() || DEFAULT_AI_PLANNER_CONFIG.model;
+    let maxTokens = Number.parseInt(src.maxTokens, 10);
+    if (!Number.isFinite(maxTokens) || maxTokens < 256 || maxTokens > 8192) {
+        maxTokens = DEFAULT_AI_PLANNER_CONFIG.maxTokens;
+    }
+    let timeoutMs = Number.parseInt(src.timeoutMs, 10);
+    if (!Number.isFinite(timeoutMs) || timeoutMs < 5000 || timeoutMs > 120000) {
+        timeoutMs = DEFAULT_AI_PLANNER_CONFIG.timeoutMs;
+    }
+    return {
+        enabled: !!src.enabled,
+        provider,
+        baseUrl,
+        apiKey,
+        model,
+        maxTokens,
+        timeoutMs,
+    };
+}
+
+function getAiPlannerConfig() {
+    return { ...globalConfig.aiPlanner };
+}
+
+function setAiPlannerConfig(cfg) {
+    globalConfig.aiPlanner = normalizeAiPlannerConfig(cfg);
+    writeJsonFileAtomic(STORE_FILE, globalConfig);
+    return getAiPlannerConfig();
 }
 function normalizeFertilizerLandTypes(input, fallback = DEFAULT_FERTILIZER_LAND_TYPES) {
     const source = Array.isArray(input) ? input : fallback;
@@ -609,6 +656,11 @@ function loadGlobalConfig() {
             } else {
                 globalConfig.runtimeClient = { ...DEFAULT_RUNTIME_CLIENT, device_info: { ...DEFAULT_RUNTIME_CLIENT.device_info } };
             }
+            if (data.aiPlanner && typeof data.aiPlanner === 'object') {
+                globalConfig.aiPlanner = normalizeAiPlannerConfig(data.aiPlanner);
+            } else {
+                globalConfig.aiPlanner = { ...DEFAULT_AI_PLANNER_CONFIG };
+            }
             if (typeof data.adminPasswordHash === 'string') {
                 globalConfig.adminPasswordHash = data.adminPasswordHash;
             }
@@ -707,6 +759,7 @@ function getConfigSnapshot(accountId) {
         ui: { ...globalConfig.ui },
         qrLogin: normalizeQrLoginConfig(globalConfig.qrLogin),
         runtimeClient: getRuntimeClientConfig(),
+        aiPlanner: getAiPlannerConfig(),
     };
 }
 
@@ -1053,6 +1106,8 @@ module.exports = {
     setQrLoginConfig,
     getRuntimeClientConfig,
     setRuntimeClientConfig,
+    getAiPlannerConfig,
+    setAiPlannerConfig,
     getAccounts,
     addOrUpdateAccount,
     deleteAccount,

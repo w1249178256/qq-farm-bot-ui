@@ -1828,10 +1828,16 @@ module.exports = {
     getAllLands,
     getLandsDetail,
     getAvailableSeeds,
-    runFarmOperation, // 导出新函数
+    runFarmOperation,
     runSingleLandOperation,
     runFertilizerByConfig,
     buildLandMap,
     getDisplayLandContext,
     isOccupiedSlaveLand,
+    // AI planner exports
+    removePlant,
+    plantSeeds,
+    harvest,
+    autoPlantEmptyLands,
+    findBestSeed,
 };
