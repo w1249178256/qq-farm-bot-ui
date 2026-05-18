@@ -87,6 +87,43 @@ async function claimAllIllustratedRewards() {
     return types.ClaimAllRewardsV2Reply.decode(replyBody);
 }
 
+async function clientReportProgress(taskId, progress) {
+    if (!types.ClientReportProgressRequest || !types.ClientReportProgressReply) return null;
+    const body = types.ClientReportProgressRequest.encode(types.ClientReportProgressRequest.create({
+        task_id: toLong(taskId),
+        progress: toLong(progress),
+    })).finish();
+    const { body: replyBody } = await sendMsgAsync('gamepb.taskpb.TaskService', 'ClientReportProgress', body);
+    return types.ClientReportProgressReply.decode(replyBody);
+}
+
+async function tryCompleteGrowthTasks(growthTasks) {
+    if (!Array.isArray(growthTasks) || growthTasks.length === 0) return 0;
+    let reported = 0;
+    for (const t of growthTasks) {
+        const id = toNum(t.id);
+        const progress = toNum(t.progress);
+        const totalProgress = toNum(t.total_progress);
+        const isClaimed = !!t.is_claimed;
+        const isUnlocked = !!t.is_unlocked;
+        if (!id || !isUnlocked || isClaimed || totalProgress <= 0) continue;
+        if (progress >= totalProgress) continue;
+        try {
+            await clientReportProgress(id, totalProgress);
+            reported++;
+            await sleep(200);
+        } catch {
+            // 部分任务不支持客户端上报，静默跳过
+        }
+    }
+    if (reported > 0) {
+        log('任务', `尝试推进 ${reported} 个成长任务进度`, {
+            module: 'task', event: 'growth_report', result: 'ok', count: reported
+        });
+    }
+    return reported;
+}
+
 async function getTicketBalanceFromBag() {
     try {
         const { getBag, getBagItems } = require('./warehouse');
@@ -227,9 +264,23 @@ async function checkAndClaimTasks(force = false) {
         const taskInfo = reply.task_info;
         const dailyAll = buildDailyTasksForDebug(taskInfo);
 
-        const dailyClaimable = analyzeTaskList(dailyAll, 'daily');
-        const growthClaimable = analyzeTaskList(taskInfo.growth_tasks || [], 'growth');
-        const mainClaimable = analyzeTaskList(taskInfo.tasks || [], 'main');
+        // 先尝试推进未完成的成长任务
+        const growthTasks = taskInfo.growth_tasks || [];
+        const reportedCount = await tryCompleteGrowthTasks(growthTasks);
+
+        // 如果有上报进度，重新拉取任务状态
+        let freshTaskInfo = taskInfo;
+        if (reportedCount > 0) {
+            try {
+                const freshReply = await getTaskInfo();
+                if (freshReply.task_info) freshTaskInfo = freshReply.task_info;
+            } catch { /* 用原始数据继续 */ }
+        }
+
+        const freshDailyAll = buildDailyTasksForDebug(freshTaskInfo);
+        const dailyClaimable = analyzeTaskList(freshDailyAll, 'daily');
+        const growthClaimable = analyzeTaskList(freshTaskInfo.growth_tasks || [], 'growth');
+        const mainClaimable = analyzeTaskList(freshTaskInfo.tasks || [], 'main');
         const claimable = [...dailyClaimable, ...growthClaimable, ...mainClaimable];
         if (claimable.length > 0) {
             log('任务', `发现 ${claimable.length} 个可领取任务`, {

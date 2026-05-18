@@ -134,6 +134,8 @@ const typeMappings = [
     ['BatchClaimTaskRewardReply', 'gamepb.taskpb.BatchClaimTaskRewardReply'],
     ['ClaimDailyRewardRequest', 'gamepb.taskpb.ClaimDailyRewardRequest'],
     ['ClaimDailyRewardReply', 'gamepb.taskpb.ClaimDailyRewardReply'],
+    ['ClientReportProgressRequest', 'gamepb.taskpb.ClientReportProgressRequest'],
+    ['ClientReportProgressReply', 'gamepb.taskpb.ClientReportProgressReply'],
     ['TaskInfoNotify', 'gamepb.taskpb.TaskInfoNotify'],
     // 邮箱
     ['GetEmailListRequest', 'gamepb.emailpb.GetEmailListRequest'],
