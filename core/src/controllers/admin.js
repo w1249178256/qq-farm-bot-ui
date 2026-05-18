@@ -720,6 +720,65 @@ function startAdminServer(dataProvider) {
         }
     });
 
+    // ── AI 任务规划器配置 ──────────────────────────────────────────────
+
+    app.get('/api/ai-planner/config', authRequired, (req, res) => {
+        try {
+            const cfg = store.getAiPlannerConfig ? store.getAiPlannerConfig() : {};
+            const safe = { ...cfg, apiKey: cfg.apiKey ? '***' : '' };
+            return res.json({ ok: true, data: safe });
+        } catch (e) {
+            return res.status(500).json({ ok: false, error: e.message });
+        }
+    });
+
+    app.post('/api/ai-planner/config', authRequired, (req, res) => {
+        try {
+            const body = (req.body && typeof req.body === 'object') ? req.body : {};
+            if (body.apiKey === '***') {
+                const current = store.getAiPlannerConfig ? store.getAiPlannerConfig() : {};
+                body.apiKey = current.apiKey || '';
+            }
+            const saved = store.setAiPlannerConfig ? store.setAiPlannerConfig(body) : {};
+            const safe = { ...saved, apiKey: saved.apiKey ? '***' : '' };
+            return res.json({ ok: true, data: safe });
+        } catch (e) {
+            return res.status(500).json({ ok: false, error: e.message });
+        }
+    });
+
+    app.post('/api/ai-planner/trigger', authRequired, async (req, res) => {
+        try {
+            const accountId = String(req.headers['x-account-id'] || '').trim();
+            if (!accountId) {
+                return res.status(400).json({ ok: false, error: 'x-account-id header required' });
+            }
+            if (!provider || typeof provider.aiPlannerTrigger !== 'function') {
+                return res.status(503).json({ ok: false, error: 'provider not ready' });
+            }
+            const result = await provider.aiPlannerTrigger(accountId);
+            return res.json({ ok: true, data: result });
+        } catch (e) {
+            return res.status(500).json({ ok: false, error: e.message });
+        }
+    });
+
+    app.get('/api/ai-planner/status', authRequired, async (req, res) => {
+        try {
+            const accountId = String(req.headers['x-account-id'] || '').trim();
+            if (!accountId) {
+                return res.status(400).json({ ok: false, error: 'x-account-id header required' });
+            }
+            if (!provider || typeof provider.aiPlannerStatus !== 'function') {
+                return res.status(503).json({ ok: false, error: 'provider not ready' });
+            }
+            const result = await provider.aiPlannerStatus(accountId);
+            return res.json({ ok: true, data: result });
+        } catch (e) {
+            return res.status(500).json({ ok: false, error: e.message });
+        }
+    });
+
     // API: 测试下线提醒推送（不落盘）
     app.post('/api/settings/offline-reminder/test', async (req, res) => {
         try {
