@@ -303,10 +303,131 @@ async function runPlanner() {
     await executePlan(plan, context);
 }
 
-// Placeholder — will be implemented in Task 4
+// ============ 计划执行器 ============
+
+function buildSteps(plan, context) {
+    const steps = [];
+    const { seedId, landIds, rounds, growMinutes } = plan;
+
+    const actionableLandIds = landIds.filter((id) => {
+        const land = context.lands.find((l) => l.id === id);
+        return land && (land.status === 'empty' || land.status === 'mature');
+    });
+
+    if (actionableLandIds.length === 0) return steps;
+
+    const matureLandIds = actionableLandIds.filter((id) => {
+        const land = context.lands.find((l) => l.id === id);
+        return land && land.status === 'mature';
+    });
+
+    if (matureLandIds.length > 0) {
+        steps.push({ type: 'harvest', landIds: matureLandIds, label: '预收获成熟土地' });
+    }
+
+    for (let i = 0; i < rounds; i++) {
+        steps.push({ type: 'plant', seedId, landIds: actionableLandIds, label: `第 ${i + 1}/${rounds} 轮种植` });
+        steps.push({ type: 'wait', minutes: growMinutes, label: `等待 ${growMinutes} 分钟成熟` });
+        steps.push({ type: 'harvest', landIds: actionableLandIds, label: `第 ${i + 1}/${rounds} 轮收获` });
+    }
+
+    steps.push({ type: 'restore', landIds: actionableLandIds, label: '恢复种植策略' });
+    steps.push({ type: 'check_tasks', label: '检查并领取任务奖励' });
+
+    return steps;
+}
+
+async function executeStep(step) {
+    log('ai-planner', `执行步骤: ${step.label}`, { module: 'ai-planner', event: 'step_start', step: step.type });
+
+    switch (step.type) {
+        case 'harvest': {
+            if (!step.landIds || step.landIds.length === 0) break;
+            await harvest(step.landIds.map(Number));
+            log('ai-planner', `收获完成，土地: ${step.landIds.join(',')}`, {
+                module: 'ai-planner', event: 'harvest_done', landIds: step.landIds,
+            });
+            break;
+        }
+        case 'plant': {
+            if (!step.landIds || step.landIds.length === 0) break;
+            await plantSeeds(step.seedId, step.landIds.map(Number));
+            log('ai-planner', `种植完成，种子: ${step.seedId}`, {
+                module: 'ai-planner', event: 'plant_done', seedId: step.seedId,
+            });
+            break;
+        }
+        case 'wait': {
+            // Handled by executeStepsSequentially via setTimeout
+            break;
+        }
+        case 'restore': {
+            if (!step.landIds || step.landIds.length === 0) break;
+            await autoPlantEmptyLands([], step.landIds.map(Number));
+            log('ai-planner', `恢复种植完成，土地: ${step.landIds.join(',')}`, {
+                module: 'ai-planner', event: 'restore_done', landIds: step.landIds,
+            });
+            break;
+        }
+        case 'check_tasks': {
+            await checkAndClaimTasks(true);
+            log('ai-planner', '任务检查完成', { module: 'ai-planner', event: 'tasks_checked' });
+            break;
+        }
+        default:
+            logWarn('ai-planner', `未知步骤类型: ${step.type}`, { module: 'ai-planner', event: 'unknown_step' });
+    }
+}
+
+function executeStepsSequentially(steps, stepIndex = 0) {
+    if (stepIndex >= steps.length) {
+        plannerState.currentPlan = null;
+        plannerState.running = false;
+        log('ai-planner', '所有步骤执行完毕', { module: 'ai-planner', event: 'plan_complete' });
+        return;
+    }
+
+    const step = steps[stepIndex];
+
+    if (step.type === 'wait') {
+        const delayMs = Math.max(0, step.minutes * 60 * 1000);
+        log('ai-planner', `等待 ${step.minutes} 分钟后继续...`, {
+            module: 'ai-planner', event: 'wait_start', minutes: step.minutes,
+        });
+        if (plannerState.currentPlan) {
+            plannerState.currentPlan.remainingRounds = Math.max(
+                0,
+                plannerState.currentPlan.remainingRounds - 1
+            );
+        }
+        setTimeout(() => {
+            executeStepsSequentially(steps, stepIndex + 1);
+        }, delayMs);
+        return;
+    }
+
+    executeStep(step)
+        .then(() => executeStepsSequentially(steps, stepIndex + 1))
+        .catch((e) => {
+            logWarn('ai-planner', `步骤 "${step.label}" 执行失败: ${e.message}，中止计划`, {
+                module: 'ai-planner', event: 'step_error', step: step.type, error: e.message,
+            });
+            plannerState.lastError = e.message;
+            plannerState.currentPlan = null;
+            plannerState.running = false;
+        });
+}
+
 async function executePlan(plan, context) {
-    log('ai-planner', '执行器尚未实现（Task 4）', { module: 'ai-planner', event: 'execute_placeholder' });
-    plannerState.currentPlan = null;
+    const steps = buildSteps(plan, context);
+    if (steps.length === 0) {
+        log('ai-planner', '没有可执行的步骤（目标土地均不可用）', { module: 'ai-planner', event: 'no_steps' });
+        plannerState.currentPlan = null;
+        return;
+    }
+    log('ai-planner', `开始执行 ${steps.length} 个步骤`, { module: 'ai-planner', event: 'execute_start', stepCount: steps.length });
+    plannerState.running = true;
+    executeStepsSequentially(steps, 0);
 }
 
 module.exports = {
@@ -318,4 +439,5 @@ module.exports = {
     collectContext,
     callAiForPlan,
     executePlan,
+    buildSteps,  // exported for testing
 };
