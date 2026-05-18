@@ -9,6 +9,7 @@ const { getAutomation, getPreferredSeed, getConfigSnapshot, applyConfigSnapshot 
 const { checkAndClaimEmails } = require('../services/email');
 const { getEmailDailyState } = require('../services/email');
 const { checkFarm, startFarmCheckLoop, stopFarmCheckLoop, refreshFarmCheckLoop, getLandsDetail, getAvailableSeeds, runFarmOperation, runSingleLandOperation, runFertilizerByConfig } = require('../services/farm');
+const { startPlannerLoop, stopPlannerLoop, triggerPlanner, getPlannerStatus } = require('../services/ai-task-planner');
 const { checkFriends, startFriendCheckLoop, stopFriendCheckLoop, refreshFriendCheckLoop, getFriendsList, getFriendLandsDetail, doFriendOperation, fetchFriendsByGids } = require('../services/friend');
 const { getInteractRecords, extractFriendsFromInteractRecords } = require('../services/interact');
 const { processInviteCodes } = require('../services/invite');
@@ -584,6 +585,7 @@ async function startBot(config) {
         startFarmCheckLoop({ externalScheduler: true });
         startFriendCheckLoop({ externalScheduler: true });
         startUnifiedScheduler();
+        startPlannerLoop();
         // 每日礼包/任务改为跨日调度，不在农场轮询内执行
         startDailyRoutineTimer();
 
@@ -619,6 +621,7 @@ async function stopBot() {
     stopFriendCheckLoop();
     stopDailyRoutineTimer();
     cleanupTaskSystem();
+    stopPlannerLoop();
     workerScheduler.clearAll();
     cleanup();
     const ws = getWs();
@@ -699,6 +702,12 @@ async function handleApiCall(msg) {
             }
             case 'doFarmOp':
                 result = await runFarmOperation(args[0], { automated: false }); // opType
+                break;
+            case 'aiPlannerTrigger':
+                result = await triggerPlanner();
+                break;
+            case 'aiPlannerStatus':
+                result = getPlannerStatus();
                 break;
             case 'doSingleLandOp':
                 result = await runSingleLandOperation(args[0] || {});
