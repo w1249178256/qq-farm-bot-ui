@@ -45,3 +45,25 @@ message BatchClaimEmailRequest {
 message BatchClaimEmailReply {
     repeated corepb.Item items = 1;
 }
+
+// ============ 批量删除邮件 ============
+message BatchDeleteEmailRequest {
+    int32 box_type = 1;
+    repeated string email_ids = 2;
+}
+
+message BatchDeleteEmailReply {}
+
+// ============ 批量已读邮件 ============
+message BatchReadEmailRequest {
+    int32 box_type = 1;
+    repeated string email_ids = 2;
+}
+
+message BatchReadEmailReply {}
+
+// ============ 服务器推送 ============
+
+message NewEmailNotify {
+    repeated EmailItem emails = 1;
+}

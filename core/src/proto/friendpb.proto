@@ -127,3 +127,48 @@ message FriendApplicationReceivedNotify {
 message FriendAddedNotify {
     repeated GameFriend friends = 1;
 }
+
+// 好友删除通知
+message DelFriendNotify {
+    repeated int64 gids = 1;
+}
+
+// 被好友拉黑通知
+message BlockedByFriendNotify {
+    int64 gid = 1;
+}
+
+// ============ 删除/拉黑好友 ============
+
+message DelFriendRequest {
+    int64 friend_gid = 1;
+}
+
+message DelFriendReply {}
+
+message BlockFriendRequest {
+    int64 friend_gid = 1;
+}
+
+message BlockFriendReply {}
+
+message UnblockFriendRequest {
+    int64 friend_gid = 1;
+}
+
+message UnblockFriendReply {}
+
+message GetBlockListRequest {}
+
+message GetBlockListReply {
+    repeated GameFriend friends = 1;
+}
+
+// ============ 标签管理 ============
+
+message SetTagsRequest {
+    int64 friend_gid = 1;
+    bool is_follow = 2;
+}
+
+message SetTagsReply {}

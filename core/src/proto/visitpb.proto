@@ -40,3 +40,10 @@ message LeaveRequest {
 message LeaveReply {
     // 空消息
 }
+
+// ============ 服务器推送 ============
+
+// 农场主在家通知
+message HostAtHomeNotify {
+    int64 host_gid = 1;
+}

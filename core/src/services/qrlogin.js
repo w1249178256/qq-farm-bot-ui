@@ -237,16 +237,34 @@ class MiniProgramLoginSession {
                 headers: this.getHeaders(api.apiDomain)
             });
 
-            if (response.status !== 200) return '';
+            if (response.status !== 200) {
+                throw new Error(`获取授权 Code 失败: HTTP ${response.status}`);
+            }
 
-            const { code } = response.data;
-            return code || '';
+            const payload = response.data || {};
+            const candidates = [
+                payload?.data?.code,
+                payload?.data?.authCode,
+                payload?.data?.auth_code,
+                payload?.authCode,
+                payload?.auth_code,
+                payload?.code,
+            ];
+            const authCode = candidates
+                .map(value => (value === undefined || value === null ? '' : String(value).trim()))
+                .find(value => value && !/^-?\d+$/.test(value) && value.length >= 12) || '';
+            const msg = String(payload.msg || payload.message || payload.error || payload.errmsg || '').trim();
+            const statusCode = payload.code !== undefined && payload.code !== null ? String(payload.code).trim() : '';
+            if (!authCode) {
+                throw new Error(`获取授权 Code 失败: code=${statusCode || 'empty'}${msg ? ` ${msg}` : ''}`);
+            }
+
+            return authCode;
         } catch (error) {
             console.error('MP Get Auth Code Error:', error.message);
-            return '';
+            throw error;
         }
     }
 }
 
 module.exports = { QRLoginSession, MiniProgramLoginSession };
-

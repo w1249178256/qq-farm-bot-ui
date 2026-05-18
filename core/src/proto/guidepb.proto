@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package gamepb.guidepb;
+
+// ============ 新手引导服务 ============
+
+message SetCurrNodeRequest {
+    int64 node_id = 1;
+}
+message SetCurrNodeReply {}
+
+message ClaimWeakGuideRewardRequest {
+    int64 node_id = 1;
+}
+message ClaimWeakGuideRewardReply {
+    bytes data = 1;
+}
+
+message SetWeakGuideNodeCompleteRequest {
+    int64 node_id = 1;
+}
+message SetWeakGuideNodeCompleteReply {}

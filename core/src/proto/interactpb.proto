@@ -28,3 +28,37 @@ message InteractRecordsRequest {}
 message InteractRecordsReply {
     repeated InteractRecord records = 1;
 }
+
+// ============ 互动详情 ============
+
+message GetInteractInfoRequest {
+    int64 host_gid = 1;
+}
+
+message GetInteractInfoReply {
+    bytes data = 1;
+}
+
+message GetInteractSummaryRequest {}
+
+message GetInteractSummaryReply {
+    bytes data = 1;
+}
+
+message DismissInteractPopupRequest {}
+
+message DismissInteractPopupReply {}
+
+// ============ 删除互动记录 ============
+
+message DeleteInteractionsRequest {
+    repeated int64 record_ids = 1;
+}
+
+message DeleteInteractionsResponse {}
+
+// ============ 服务器推送 ============
+
+message InteractNewRecordNotify {
+    InteractRecord record = 1;
+}

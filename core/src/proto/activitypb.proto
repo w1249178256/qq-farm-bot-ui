@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package gamepb.activitypb;
+
+// ============ 活动服务 ============
+
+message GetActivityInfoRequest {
+    int32 activity_id = 1;
+}
+message GetActivityInfoReply {
+    bytes activity_info = 1;
+}
+
+// ============ 服务器推送 ============
+
+message ActiviesChangeNotify {
+    bytes data = 1;
+}

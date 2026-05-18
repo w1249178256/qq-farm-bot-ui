@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package gamepb.rankpb;
+
+// ============ 排行榜服务 ============
+
+message GetGroupRequest {
+    int32 type = 1;
+}
+message GetGroupReply {
+    repeated bytes groups = 1;
+}
+
+message ListRequest {
+    int32 type = 1;
+    int32 page = 2;
+}
+message ListReply {
+    repeated bytes items = 1;
+}

@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package gamepb.systemopenpb;
+
+// ============ 系统解锁 ============
+
+message GetSystemOpenInfoRequest {}
+message GetSystemOpenInfoReply {
+    bytes data = 1;
+}
+
+// ============ 服务器推送 ============
+
+message SystemUnlockNotify {
+    repeated int64 unlocked_ids = 1;
+}

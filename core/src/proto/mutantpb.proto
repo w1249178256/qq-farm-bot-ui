@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package gamepb.mutantpb;
+
+// ============ 变异服务 ============
+
+message ReadMutantBookRequest {}
+message ReadMutantBookReply {
+    bytes data = 1;
+}

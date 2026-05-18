@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package gamepb.bulletinboardpb;
+
+// ============ 公告板服务 ============
+
+message GetBulletinListRequest {}
+message GetBulletinListReply {
+    repeated bytes bulletins = 1;
+}
+
+message GetBulletinDetailRequest {
+    int64 bulletin_id = 1;
+}
+message GetBulletinDetailReply {
+    bytes detail = 1;
+}
+
+// ============ 服务器推送 ============
+
+message BulletinListChangedNTF {
+    bytes data = 1;
+}

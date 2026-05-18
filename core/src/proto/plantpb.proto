@@ -275,3 +275,10 @@ message LandsNotify {
     repeated LandInfo lands = 1;   // 变化的土地列表
     int64 host_gid = 2;            // 农场主GID
 }
+
+// ============ 获取玩家数据 ============
+message GetPlayerDataRequest {}
+
+message GetPlayerDataReply {
+    bytes data = 1;
+}

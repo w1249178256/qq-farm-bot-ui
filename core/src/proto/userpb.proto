@@ -121,3 +121,44 @@ message ReportArkClickReply {
 message BasicNotify {
     BasicInfo basic = 1;
 }
+
+// ============ 登出 ============
+message LogoutRequest {}
+message LogoutReply {}
+
+// ============ 设置 QQ 好友推荐授权 ============
+message SetQQFriendRecommendAuthorizedRequest {
+    int64 authorized = 1;
+}
+message SetQQFriendRecommendAuthorizedReply {}
+
+// ============ 用户设置 ============
+message SetUserSettingsRequest {
+    bytes settings = 1;
+}
+message SetUserSettingsReply {}
+
+message GetUserSettingsRequest {}
+message GetUserSettingsReply {
+    bytes settings = 1;
+}
+
+// ============ 批量获取基本信息 ============
+message BatchGetBasicInfoRequest {
+    repeated int64 gids = 1;
+}
+message BatchGetBasicInfoReply {
+    repeated BasicInfo basics = 1;
+}
+
+// ============ 获取简要信息 ============
+message GetBriefInfoRequest {
+    int64 gid = 1;
+}
+message GetBriefInfoReply {
+    BasicInfo basic = 1;
+}
+
+// ============ 注销账号 ============
+message DeleteAccountRequest {}
+message DeleteAccountReply {}

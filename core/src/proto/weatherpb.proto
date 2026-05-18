@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package gamepb.weatherpb;
+
+// ============ 天气服务 ============
+
+message GetCurrentWeatherRequest {}
+message GetCurrentWeatherReply {
+    int32 weather_id = 1;
+    bytes data = 2;
+}
+
+message GetTodayWeatherRequest {}
+message GetTodayWeatherReply {
+    int32 weather_id = 1;
+    bytes data = 2;
+}

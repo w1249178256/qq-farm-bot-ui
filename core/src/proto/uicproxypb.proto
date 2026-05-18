@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package gamepb.uicproxypb;
+
+// ============ UIC 代理服务（内容审核） ============
+
+message ModeratePicRequest {
+    string url = 1;
+}
+message ModeratePicReply {
+    int32 result = 1;
+}
+
+message ModerateTextRequest {
+    string text = 1;
+}
+message ModerateTextReply {
+    int32 result = 1;
+}
+
+message BatchModeratePicRequest {
+    repeated string urls = 1;
+}
+message BatchModeratePicReply {
+    repeated int32 results = 1;
+}
+
+message BatchModerateTextRequest {
+    repeated string texts = 1;
+}
+message BatchModerateTextReply {
+    repeated int32 results = 1;
+}

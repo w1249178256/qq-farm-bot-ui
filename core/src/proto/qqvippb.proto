@@ -20,3 +20,20 @@ message ClaimDailyGiftRequest {}
 message ClaimDailyGiftReply {
     repeated corepb.Item items = 1;  // 奖励物品列表
 }
+
+// --- 刷新VIP信息 ---
+message RefreshVipInfoRequest {}
+
+message RefreshVipInfoReply {
+    bytes data = 1;
+}
+
+// ============ 服务器推送 ============
+
+message DailyGiftStatusChangedNTF {
+    bool can_claim = 1;
+}
+
+message VipInfoUpdatedNTF {
+    bytes data = 1;
+}

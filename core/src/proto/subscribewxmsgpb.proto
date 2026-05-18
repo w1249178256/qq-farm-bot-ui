@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package gamepb.subscribewxmsg;
+
+// ============ 订阅消息服务 ============
+
+message GetSubscribeMessageStatusRequest {}
+message GetSubscribeMessageStatusReply {
+    bytes data = 1;
+}
+
+message SetSubscribeMessageStatusRequest {
+    bytes data = 1;
+}
+message SetSubscribeMessageStatusReply {}
+
+// ============ 服务器推送 ============
+
+message SubscribeAuthPromptNotify {
+    bytes data = 1;
+}

@@ -21,6 +21,7 @@ const { MiniProgramLoginSession } = require('../services/qrlogin');
 const { sendPushooMessage } = require('../services/push');
 const { getSchedulerRegistrySnapshot } = require('../services/scheduler');
 const { fetchProfileByCode } = require('../services/manual-login-profile');
+const { decodeProtocolPacket, listProtocolTypes } = require('../services/protocol-analyzer');
 const { 
     hashPassword: secureHash, 
     verifyPassword,
@@ -66,7 +67,7 @@ function startAdminServer(dataProvider) {
     provider = dataProvider;
 
     app = express();
-    app.use(express.json());
+    app.use(express.json({ limit: '5mb' }));
 
     const tokens = new Set();
 
@@ -223,6 +224,24 @@ function startAdminServer(dataProvider) {
             return res.json({ ok: true, data: { runtime: getSchedulerRegistrySnapshot(), worker: null, workerError: 'DataProvider does not support scheduler status' } });
         } catch (e) {
             return handleApiError(res, e);
+        }
+    });
+
+    app.get('/api/protocol/types', async (_req, res) => {
+        try {
+            const data = await listProtocolTypes();
+            return res.json({ ok: true, data });
+        } catch (e) {
+            return handleApiError(res, e);
+        }
+    });
+
+    app.post('/api/protocol/decode', async (req, res) => {
+        try {
+            const data = await decodeProtocolPacket(req.body || {});
+            return res.json({ ok: true, data });
+        } catch (e) {
+            return res.json({ ok: false, error: e.message });
         }
     });
 
@@ -855,6 +874,7 @@ function startAdminServer(dataProvider) {
                         error: error.message,
                         accountId: payload.id || '',
                     });
+                    return res.status(400).json({ ok: false, error: `Code 验证失败: ${error.message}` });
                 }
             }
 
@@ -985,7 +1005,12 @@ function startAdminServer(dataProvider) {
                 const nickname = result.nickname || ''; // 获取昵称
                 const appid = '1112386029'; // Farm appid
 
-                const authCode = await MiniProgramLoginSession.getAuthCode(ticket, appid, { apiDomain: qrLogin.apiDomain });
+                let authCode = '';
+                try {
+                    authCode = await MiniProgramLoginSession.getAuthCode(ticket, appid, { apiDomain: qrLogin.apiDomain });
+                } catch (error) {
+                    return res.json({ ok: true, data: { status: 'Error', error: error.message } });
+                }
 
                 let avatar = '';
                 if (uin) {

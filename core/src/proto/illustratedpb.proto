@@ -34,3 +34,21 @@ message ClaimAllRewardsV2Reply {
 }
 
 message IllustratedRewardRedDotNotifyV2 {}
+
+// ============ 服务器推送 ============
+
+message DogProtectionNotify {
+    bytes data = 1;
+}
+
+message StealBonusNotify {
+    bytes data = 1;
+}
+
+message HarvestBonusNotify {
+    bytes data = 1;
+}
+
+message IllustratedChangeNotifyV2 {
+    repeated IllustratedItem items = 1;
+}

@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package gamepb.dogpb;
+
+import "corepb.proto";
+
+// ============ 宠物狗服务 ============
+
+message GetDogInfoRequest {}
+message GetDogInfoReply {
+    bytes dog_info = 1;
+}
+
+message ActivateDogRequest {
+    int64 dog_id = 1;
+}
+message ActivateDogReply {}
+
+message BuyAndActivateDogRequest {
+    int64 dog_id = 1;
+}
+message BuyAndActivateDogReply {
+    repeated corepb.Item items = 1;
+}
+
+message DeployDogRequest {
+    int64 host_gid = 1;
+}
+message DeployDogReply {}
+
+message WithdrawDogRequest {}
+message WithdrawDogReply {}
+
+message AddFoodRequest {
+    int64 food_id = 1;
+    int64 count = 2;
+}
+message AddFoodReply {}
+
+message GetProtectLogsRequest {}
+message GetProtectLogsReply {
+    repeated bytes logs = 1;
+}
+
+message ClaimSkillGiftsRequest {}
+message ClaimSkillGiftsReply {
+    repeated corepb.Item items = 1;
+}
+
+// ============ 服务器推送 ============
+
+message SkillTriggerNotify {
+    bytes data = 1;
+}
+
+message DogStatusNotify {
+    bytes data = 1;
+}
+
+message NewProtectLogNotify {
+    bytes data = 1;
+}

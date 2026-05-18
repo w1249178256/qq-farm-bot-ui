@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package gamepb.marqueepb;
+
+// ============ 跑马灯服务 ============
+
+message GetMarqueeRequest {}
+message GetMarqueeReply {
+    repeated bytes marquees = 1;
+}
+
+// ============ 服务器推送 ============
+
+message MarqueeNotify {
+    bytes data = 1;
+}

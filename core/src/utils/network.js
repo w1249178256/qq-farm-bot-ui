@@ -491,6 +491,25 @@ function connect(code, onLoginSuccess) {
         sendLogin(onLoginSuccess);
     });
 
+    ws.on('unexpected-response', (_request, response) => {
+        const statusCode = Number(response.statusCode) || 0;
+        const statusMessage = String(response.statusMessage || '').trim();
+        let body = '';
+        response.setEncoding('utf8');
+        response.on('data', (chunk) => {
+            if (body.length < 1000) body += String(chunk);
+        });
+        response.on('end', () => {
+            const bodyText = body.trim().replace(/\s+/g, ' ').slice(0, 500);
+            const message = `HTTP ${statusCode}${statusMessage ? ` ${statusMessage}` : ''}${bodyText ? `: ${bodyText}` : ''}`;
+            logWarn('系统', `[WS] 握手失败: ${message}`);
+            if (statusCode) {
+                setWsErrorState(statusCode, message);
+                networkEvents.emit('ws_error', { code: statusCode, message });
+            }
+        });
+    });
+
     ws.on('message', (data) => {
         handleMessage(Buffer.isBuffer(data) ? data : Buffer.from(data));
     });

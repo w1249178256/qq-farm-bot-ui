@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package gamepb.avatarframepb;
+
+// ============ 头像框服务 ============
+
+message AvatarFramesOwnedRequest {}
+message AvatarFramesOwnedReply {
+    repeated bytes frames = 1;
+}
+
+message AvatarFramesEquipedRequest {}
+message AvatarFramesEquipedReply {
+    repeated bytes frames = 1;
+}
+
+message UpdateEquipRequest {
+    repeated int64 frame_ids = 1;
+}
+message UpdateEquipReply {}
+
+// ============ 服务器推送 ============
+
+message AvatarFrameRedDotNotify {
+    bytes data = 1;
+}

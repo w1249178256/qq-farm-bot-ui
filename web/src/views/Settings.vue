@@ -416,8 +416,8 @@ const localQrLogin = ref({
 
 const localRuntimeClient = ref({
   serverUrl: 'wss://gate-obt.nqf.qq.com/prod/ws',
-  clientVersion: '1.7.0.6_20260313',
-  os: 'iOS',
+  clientVersion: '1.11.3.9_20260508',
+  os: 'OS X',
   device_info: {
     sys_software: 'iOS 26.2.1',
     network: 'wifi',
@@ -681,7 +681,7 @@ const runtimeClientPresetMap = {
       'iPhone 16 Pro Max<iPhone17,2>',
     ],
     defaults: {
-      clientVersion: '1.7.0.6_20260313',
+      clientVersion: '1.11.3.9_20260508',
       sys_software: 'iOS 26.2.1',
       network: 'wifi',
       memory: '7672',
@@ -733,11 +733,37 @@ const runtimeClientPresetMap = {
       'HONOR Magic6<BDY-AN00>',
     ],
     defaults: {
-      clientVersion: '1.7.0.6_20260313',
+      clientVersion: '1.11.3.9_20260508',
       sys_software: 'Android 14',
       network: 'wifi',
       memory: '8192',
       device_id: 'Xiaomi 14<23127PN0CC>',
+    },
+  },
+  'OS X': {
+    systemVersions: [
+      'OS X 10.15.7',
+      'macOS 11.7.10',
+      'macOS 12.7.6',
+      'macOS 13.6.9',
+      'macOS 14.7.2',
+      'macOS 15.2',
+    ],
+    networks: ['wifi'],
+    memories: ['4096', '8192', '16384', '32768'],
+    deviceIds: [
+      'MacBook Pro<MacBookPro16,1>',
+      'MacBook Pro<MacBookPro18,3>',
+      'MacBook Air<MacBookAir10,1>',
+      'Mac mini<Mac14,3>',
+      'iMac<iMac21,1>',
+    ],
+    defaults: {
+      clientVersion: '1.11.3.9_20260508',
+      sys_software: 'OS X 10.15.7',
+      network: 'wifi',
+      memory: '8192',
+      device_id: 'MacBook Pro<MacBookPro16,1>',
     },
   },
 } as const
@@ -753,7 +779,7 @@ function toRuntimeOptions(values: readonly string[], currentValue: string) {
 }
 
 const currentRuntimePreset = computed(() => {
-  const os = String(localRuntimeClient.value.os || 'iOS')
+  const os = String(localRuntimeClient.value.os || 'OS X')
   return runtimeClientPresetMap[os as keyof typeof runtimeClientPresetMap] || runtimeClientPresetMap.iOS
 })
 
@@ -774,7 +800,7 @@ const runtimeDeviceIdOptions = computed(() =>
 )
 
 function handleRuntimeOsChange(value: string | number) {
-  const os = String(value || 'iOS')
+  const os = String(value || 'OS X')
   const preset = runtimeClientPresetMap[os as keyof typeof runtimeClientPresetMap]
   if (!preset)
     return
@@ -1710,7 +1736,7 @@ async function handleTestOffline() {
               v-model="localRuntimeClient.clientVersion"
               label="游戏版本号"
               type="text"
-              placeholder="例如: 1.7.0.6_20260313"
+              placeholder="例如: 1.11.3.9_20260508"
             />
           </div>
 

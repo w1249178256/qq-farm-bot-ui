@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package gamepb.randomdroppb;
+
+// ============ 随机掉落服务 ============
+
+message GetInfoRequest {}
+message GetInfoReply {
+    bytes data = 1;
+}
+
+// ============ 服务器推送 ============
+
+message ActivityStatusChangeNotify {
+    bytes data = 1;
+}

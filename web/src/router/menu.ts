@@ -36,6 +36,13 @@ export const menuRoutes: MenuItem[] = [
     component: () => import('@/views/Analytics.vue'),
   },
   {
+    path: 'protocol',
+    name: 'protocol',
+    label: '协议',
+    icon: 'i-carbon-code',
+    component: () => import('@/views/ProtocolAnalyzer.vue'),
+  },
+  {
     path: 'accounts',
     name: 'accounts',
     label: '账号',

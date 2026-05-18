@@ -1,6 +1,7 @@
 FROM node:20-alpine AS builder
 
 WORKDIR /app
+ENV COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
 
 RUN corepack enable
 
@@ -26,6 +27,7 @@ RUN pnpm build:web
 FROM node:20-alpine AS prod-deps
 
 WORKDIR /app
+ENV COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
 
 RUN corepack enable
 
@@ -58,7 +60,7 @@ COPY --from=builder /app/core ./
 COPY --from=builder /app/web/dist ../web/dist
 
 # Expose port
-EXPOSE 3000
+EXPOSE 8808
 
 # Start command
 CMD ["node", "client.js"]

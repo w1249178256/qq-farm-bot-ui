@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package gamepb.guestbookpb;
+
+// ============ 留言板服务 ============
+
+message GetMessageListRequest {
+    int64 host_gid = 1;
+    int32 page = 2;
+}
+message GetMessageListResponse {
+    repeated bytes messages = 1;
+}
+
+message PostMessageRequest {
+    int64 host_gid = 1;
+    string content = 2;
+}
+message PostMessageResponse {}
+
+message DeleteMessageRequest {
+    int64 message_id = 1;
+}
+message DeleteMessageResponse {}
+
+message GetRepliesRequest {
+    int64 message_id = 1;
+}
+message GetRepliesResponse {
+    repeated bytes replies = 1;
+}
+
+message PostReplyRequest {
+    int64 message_id = 1;
+    string content = 2;
+}
+message PostReplyResponse {}
+
+message DeleteReplyRequest {
+    int64 reply_id = 1;
+}
+message DeleteReplyResponse {}
+
+message LikeMessageRequest {
+    int64 message_id = 1;
+}
+message LikeMessageResponse {}
+
+message LikeReplyRequest {
+    int64 reply_id = 1;
+}
+message LikeReplyResponse {}
+
+message PinMessageRequest {
+    int64 message_id = 1;
+}
+message PinMessageResponse {}
+
+message GetUnreadCountRequest {}
+message GetUnreadCountResponse {
+    int64 count = 1;
+}

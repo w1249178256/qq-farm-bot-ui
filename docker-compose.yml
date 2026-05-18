@@ -7,8 +7,9 @@ services:
     restart: unless-stopped
     environment:
       ADMIN_PASSWORD: admin
+      ADMIN_PORT: 8808
       TZ: Asia/Shanghai
     ports:
-      - "3000:3000"
+      - "8808:8808"
     volumes:
       - ./data:/app/core/data

@@ -71,3 +71,24 @@ message ClaimMonthCardRewardRequest {
 message ClaimMonthCardRewardReply {
   repeated corepb.Item items = 1;
 }
+
+// 获取商城概览
+message GetMallProfilesRequest {}
+
+message GetMallProfilesReply {
+  repeated bytes profiles = 1;
+}
+
+// ============ 服务器推送 ============
+
+message NeedNotify {
+  bytes data = 1;
+}
+
+message ProductsHasChangedNotify {
+  bytes data = 1;
+}
+
+message MonthCardInfoNTF {
+  bytes data = 1;
+}

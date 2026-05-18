@@ -28,3 +28,9 @@ message ClaimRedPacketReply {
   int32 status = 1;
   corepb.Item item = 2;
 }
+
+// ============ 服务器推送 ============
+
+message GetTodayClaimStatusNotify {
+  repeated RedPacketInfo infos = 1;
+}

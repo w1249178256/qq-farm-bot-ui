@@ -109,6 +109,20 @@ async function fetchProfileByCode(code, options = {}) {
             }
         });
 
+        ws.on('unexpected-response', (_request, response) => {
+            const statusCode = Number(response.statusCode) || 0;
+            const statusMessage = String(response.statusMessage || '').trim();
+            let body = '';
+            response.setEncoding('utf8');
+            response.on('data', (chunk) => {
+                if (body.length < 1000) body += String(chunk);
+            });
+            response.on('end', () => {
+                const bodyText = body.trim().replace(/\s+/g, ' ').slice(0, 500);
+                finish(new Error(`WebSocket 握手失败: HTTP ${statusCode}${statusMessage ? ` ${statusMessage}` : ''}${bodyText ? `: ${bodyText}` : ''}`));
+            });
+        });
+
         ws.on('message', (data) => {
             try {
                 const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);

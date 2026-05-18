@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package gamepb.nudgepb;
+
+// ============ 戳一戳/催熟服务 ============
+
+message HandleNudgeResponseRequest {
+    int64 host_gid = 1;
+    int32 action = 2;
+}
+message HandleNudgeResponseReply {}

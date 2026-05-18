@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package gamepb.skinpb;
+
+// ============ 皮肤服务 ============
+
+message SkinsOwnedRequest {}
+message SkinsOwnedReply {
+    repeated int64 skin_ids = 1;
+}
+
+message SkinsEquippedRequest {}
+message SkinsEquippedReply {
+    repeated int64 skin_ids = 1;
+}
+
+message EquipRequest {
+    int64 skin_id = 1;
+}
+message EquipReply {}
+
+message UnequipRequest {
+    int64 skin_id = 1;
+}
+message UnequipReply {}
+
+// ============ 服务器推送 ============
+
+message SkinChangeNotify {
+    repeated int64 skin_ids = 1;
+}
+
+message SkinInvalidNotify {
+    repeated int64 skin_ids = 1;
+}
+
+message SkinNewNotify {
+    repeated int64 skin_ids = 1;
+}

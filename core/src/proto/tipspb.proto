@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package gamepb.tipspb;
+
+// ============ 提示推送 ============
+
+message TipsNotify {
+    string content = 1;
+    int32 type = 2;
+}

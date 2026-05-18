@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package gamepb.careerpb;
+
+// ============ 职业服务 ============
+
+message CareerInfoGetRequest {}
+message CareerInfoGetReply {
+    bytes career_info = 1;
+}

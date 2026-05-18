@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package gamepb.rechargebonuspb;
+
+// ============ 充值奖励服务 ============
+
+message GetConfigRequest {}
+message GetConfigReply {
+    bytes data = 1;
+}
