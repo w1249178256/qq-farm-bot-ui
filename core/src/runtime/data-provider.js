@@ -105,6 +105,7 @@ function createDataProvider(options) {
             return Array.isArray(fromStore) ? fromStore : [];
         },
         extractFriendsFromInteractRecords: (accountRef) => callWorkerApi(resolveAccountRefId(accountRef), 'extractFriendsFromInteractRecords'),
+        verifyAndImportGids: (accountRef, gids) => callWorkerApi(resolveAccountRefId(accountRef), 'verifyAndImportGids', gids),
         getFriendLands: (accountRef, gid) => callWorkerApi(resolveAccountRefId(accountRef), 'getFriendLands', gid),
         doFriendOp: (accountRef, gid, opType) => callWorkerApi(resolveAccountRefId(accountRef), 'doFriendOp', gid, opType),
         getBag: (accountRef) => callWorkerApi(resolveAccountRefId(accountRef), 'getBag'),

@@ -463,7 +463,7 @@ function startAdminServer(dataProvider) {
         }
     });
 
-    app.post('/api/friend-cache/import-gids', (req, res) => {
+    app.post('/api/friend-cache/import-gids', async (req, res) => {
         const id = getAccId(req);
         if (!id) return res.status(400).json({ ok: false, error: 'Missing x-account-id' });
         try {
@@ -480,16 +480,28 @@ function startAdminServer(dataProvider) {
             if (validGids.length === 0) {
                 return res.json({ ok: false, error: '没有有效的 GID' });
             }
-            const friends = validGids.map(gid => ({
-                gid,
-                nick: `GID:${gid}`,
-                avatarUrl: '',
-            }));
-            const saved = store.updateFriendCache ? store.updateFriendCache(id, friends) : friends;
+
+            const existingCache = store.getFriendCache ? store.getFriendCache(id) : [];
+            const existingGids = new Set(existingCache.map(f => f.gid));
+            const newGids = validGids.filter(g => !existingGids.has(g));
+
+            if (newGids.length === 0) {
+                return res.json({ ok: true, data: existingCache, message: '所有 GID 已存在，无需导入' });
+            }
+
+            const verifiedFriends = await provider.verifyAndImportGids(id, newGids);
+            const saved = store.getFriendCache ? store.getFriendCache(id) : [];
             if (provider && typeof provider.broadcastConfig === 'function') {
                 provider.broadcastConfig(id);
             }
-            return res.json({ ok: true, data: saved, message: `已导入 ${validGids.length} 个 GID` });
+
+            const successCount = verifiedFriends ? verifiedFriends.successCount : 0;
+            const failedGids = verifiedFriends ? verifiedFriends.failedGids : [];
+            let message = `已导入 ${successCount}/${newGids.length} 个 GID`;
+            if (failedGids.length > 0) {
+                message += `，${failedGids.length} 个无效已跳过`;
+            }
+            return res.json({ ok: true, data: saved, message, failedGids });
         } catch (e) {
             return handleApiError(res, e);
         }

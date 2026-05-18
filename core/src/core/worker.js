@@ -9,7 +9,7 @@ const { getAutomation, getPreferredSeed, getConfigSnapshot, applyConfigSnapshot 
 const { checkAndClaimEmails } = require('../services/email');
 const { getEmailDailyState } = require('../services/email');
 const { checkFarm, startFarmCheckLoop, stopFarmCheckLoop, refreshFarmCheckLoop, getLandsDetail, getAvailableSeeds, runFarmOperation, runSingleLandOperation, runFertilizerByConfig } = require('../services/farm');
-const { checkFriends, startFriendCheckLoop, stopFriendCheckLoop, refreshFriendCheckLoop, getFriendsList, getFriendLandsDetail, doFriendOperation } = require('../services/friend');
+const { checkFriends, startFriendCheckLoop, stopFriendCheckLoop, refreshFriendCheckLoop, getFriendsList, getFriendLandsDetail, doFriendOperation, fetchFriendsByGids } = require('../services/friend');
 const { getInteractRecords, extractFriendsFromInteractRecords } = require('../services/interact');
 const { processInviteCodes } = require('../services/invite');
 const { autoBuyOrganicFertilizer, buyFreeGifts, getFreeGiftDailyState } = require('../services/mall');
@@ -655,6 +655,21 @@ async function handleApiCall(msg) {
             case 'extractFriendsFromInteractRecords':
                 result = await extractFriendsFromInteractRecords();
                 break;
+            case 'verifyAndImportGids': {
+                const gidsToVerify = Array.isArray(args[0]) ? args[0] : [];
+                const verified = await fetchFriendsByGids(gidsToVerify);
+                const failedGids = verified._failedGids || [];
+                const validFriends = verified.map(f => ({
+                    gid: Number(f.gid),
+                    nick: String(f.remark || f.name || '').trim() || `GID:${Number(f.gid)}`,
+                    avatarUrl: String(f.avatar_url || '').trim(),
+                })).filter(f => f.gid > 0);
+                if (validFriends.length > 0) {
+                    require('../models/store').updateFriendCache(undefined, validFriends);
+                }
+                result = { successCount: validFriends.length, failedGids };
+                break;
+            }
             case 'getFriendBlacklist':
                 result = require('../models/store').getFriendBlacklist();
                 break;

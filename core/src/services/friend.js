@@ -241,6 +241,7 @@ async function fetchFriendsByGids(gids) {
     if (validGids.length === 0) return [];
 
     const allFriends = [];
+    const failedGids = [];
     for (let i = 0; i < validGids.length; i += GET_GAME_FRIENDS_BATCH_SIZE) {
         const batch = validGids.slice(i, i + GET_GAME_FRIENDS_BATCH_SIZE);
         try {
@@ -249,17 +250,24 @@ async function fetchFriendsByGids(gids) {
             })).finish();
             const { body: replyBody } = await sendMsgAsync('gamepb.friendpb.FriendService', 'GetGameFriends', body);
             if (replyBody && replyBody.length > 0) {
-                const reply = types.GetAllFriendsReply.decode(replyBody);
+                const reply = types.GetGameFriendsReply.decode(replyBody);
                 const friends = reply.game_friends || [];
                 allFriends.push(...friends);
+                const returnedGids = new Set(friends.map(f => toNum(f.gid)));
+                for (const g of batch) {
+                    if (!returnedGids.has(g)) failedGids.push(g);
+                }
+            } else {
+                failedGids.push(...batch);
             }
         } catch {
-            // 单批失败不影响其他批次
+            failedGids.push(...batch);
         }
         if (i + GET_GAME_FRIENDS_BATCH_SIZE < validGids.length) {
             await sleep(100);
         }
     }
+    allFriends._failedGids = failedGids;
     return allFriends;
 }
 
@@ -291,7 +299,7 @@ async function getAllFriends() {
         if (missingGids.length > 0) {
             const extraFriends = await fetchFriendsByGids(missingGids);
             if (extraFriends.length > 0) {
-                const combined = [...apiFriends, ...extraFriends];
+                const combined = deduplicateFriends([...apiFriends, ...extraFriends]);
                 saveFriendsToCache(extraFriends);
                 return { game_friends: combined };
             }
@@ -309,14 +317,26 @@ async function getAllFriends() {
     }
     
     if (apiFriends.length > 0) {
-        return { game_friends: apiFriends };
+        return { game_friends: deduplicateFriends(apiFriends) };
     }
-    
+
     if (apiError) {
         throw apiError;
     }
-    
+
     return { game_friends: [] };
+}
+
+function deduplicateFriends(friends) {
+    const seen = new Set();
+    const result = [];
+    for (const f of friends) {
+        const gid = toNum(f.gid);
+        if (!gid || seen.has(gid)) continue;
+        seen.add(gid);
+        result.push(f);
+    }
+    return result;
 }
 
 // ============ 好友申请 API (微信同玩) ============
@@ -1370,4 +1390,5 @@ module.exports = {
     getFriendsList,
     getFriendLandsDetail,
     doFriendOperation,
+    fetchFriendsByGids,
 };
