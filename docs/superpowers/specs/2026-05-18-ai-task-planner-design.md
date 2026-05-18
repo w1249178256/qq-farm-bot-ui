@@ -157,13 +157,13 @@ function interpretPlan(plan, context) {
 - `remove_plant` → `removePlant(landIds)`
 - `plant` → `plantSeeds(seedId, landIds)`
 - `harvest` → `harvestLands(landIds)`
-- `restore` → 恢复 preferred 策略种植
+- `restore` → 恢复 preferred 策略种植（原来空地也补种）
 - `check_tasks` → `checkAndClaimTasks(force=true)`
 
 **调度器** 处理 `wait` 步骤：不阻塞，用 `setTimeout` 在成熟时间后回调继续执行下一步。
 
 **触发时机：**
-1. **定时触发**：每天 00:05 检查一次未完成任务，有可推进任务则启动规划
+1. **定时触发**：每 30 分钟检查一次未完成任务，有可推进任务则启动规划
 2. **回调触发**：每轮种植完成后，按 `growMinutes × rounds` 计算下次检查时间，到时自动继续
 
 ---
