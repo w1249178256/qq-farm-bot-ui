@@ -3,7 +3,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 ENV COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
 
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10.30.2 --activate
 
 # Copy workspace configuration
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
@@ -13,8 +13,11 @@ COPY core/package.json ./core/
 COPY web/package.json ./web/
 
 # Install all deps for build
-RUN npm config set registry https://registry.npmmirror.com/
-RUN pnpm install --frozen-lockfile
+RUN pnpm config set registry https://registry.npmmirror.com/ && \
+    pnpm config set network-concurrency 4 && \
+    pnpm config set fetch-retries 5 && \
+    pnpm config set fetch-retry-mintimeout 20000 && \
+    pnpm install --frozen-lockfile
 
 # Copy source code
 COPY core ./core
@@ -29,15 +32,18 @@ FROM node:20-alpine AS prod-deps
 WORKDIR /app
 ENV COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
 
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10.30.2 --activate
 
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY core/package.json ./core/
 COPY web/package.json ./web/
 
 # Install only runtime deps for core
-RUN npm config set registry https://registry.npmmirror.com/
-RUN pnpm -C core install --prod --frozen-lockfile
+RUN pnpm config set registry https://registry.npmmirror.com/ && \
+    pnpm config set network-concurrency 4 && \
+    pnpm config set fetch-retries 5 && \
+    pnpm config set fetch-retry-mintimeout 20000 && \
+    pnpm -C core install --prod --frozen-lockfile
 
 # ==========================================
 
