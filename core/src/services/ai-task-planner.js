@@ -203,16 +203,18 @@ const SYSTEM_PROMPT = `你是一个农场游戏任务规划器。根据当前状
 
 可执行的操作类型：
 - buy_seed：购买种子（condType=7，params[0]是plantId）
-- plant_harvest：种植并收获（condType=1/2/3，收获后bot会自动出售，可推进出售类任务）
+- sell_items：直接出售背包里的果实（condType=3出售类任务，优先用此方式）
+- plant_harvest：种植并收获（condType=1/2收获/种植类任务，或背包无果实时的出售任务）
 
 规则：
 1. condType=7（购买种子）→ 必须用 buy_seed，plantId=params[0]，buyCount=totalProgress-progress
-2. condType=1/2/3（收获/种植/出售）→ 用 plant_harvest，选最快成熟的种子，rounds=max(1, ceil((totalProgress-progress)/landCount))
-3. plant_harvest 只能动用 maxActionLands 块土地（不超过总土地的 1/3），优先选成熟时间最短的种子
-4. plant_harvest 只能使用"空地"或"已成熟"状态的土地，不铲除正在生长的作物
-5. condType=16/18（登录/互动）→ 跳过，无法主动推进
-6. 跳过无法主动推进的任务（升级/扩建/等级提升等）
-7. 输出严格的 JSON，不要解释
+2. condType=3（出售）→ 优先用 sell_items 直接出售背包果实，无需种植
+3. condType=1/2（收获/种植）→ 用 plant_harvest，选最快成熟的种子，rounds=max(1, ceil((totalProgress-progress)/landCount))
+4. plant_harvest 只能动用 maxActionLands 块土地（不超过总土地的 1/3），优先选成熟时间最短的种子
+5. plant_harvest 只能使用"空地"或"已成熟"状态的土地，不铲除正在生长的作物
+6. condType=16/18（登录/互动）→ 跳过，无法主动推进
+7. 跳过无法主动推进的任务（升级/扩建/等级提升等）
+8. 输出严格的 JSON，不要解释
 
 示例1（购买任务）：
 任务: {"id":100035,"desc":"购买8个玉米种子","condType":7,"params":["20004"],"progress":0,"totalProgress":8}
@@ -224,15 +226,15 @@ const SYSTEM_PROMPT = `你是一个农场游戏任务规划器。根据当前状
 
 示例3（出售任务）：
 任务: {"id":100010,"desc":"售卖果实获得金币","condType":3,"params":[],"progress":500,"totalProgress":1800}
-输出: {"tasks":[{"taskId":100010,"desc":"售卖果实获得金币","need":1800,"done":500}],"plan":{"type":"plant_harvest","seedId":20002,"seedName":"白萝卜","growMinutes":1,"landIds":[1,2],"rounds":3,"estimatedMinutes":3,"reason":"condType=3出售任务，收获后bot自动出售，用最快种子推进"},"skipped":[]}
+输出: {"tasks":[{"taskId":100010,"desc":"售卖果实获得金币","need":1800,"done":500}],"plan":{"type":"sell_items","reason":"condType=3出售任务，直接出售背包果实"},"skipped":[]}
 
 输出格式：
 {
   "tasks": [{"taskId": <number>, "desc": "<string>", "need": <number>, "done": <number>}],
   "plan": {
-    "type": "plant_harvest" | "buy_seed",
+    "type": "plant_harvest" | "buy_seed" | "sell_items",
     "seedId": <number>,        // plant_harvest专用
-    "seedName": "<string>",
+    "seedName": "<string>",    // plant_harvest/buy_seed专用
     "growMinutes": <number>,   // plant_harvest专用
     "landIds": [<number>],     // plant_harvest专用
     "rounds": <number>,        // plant_harvest专用
@@ -281,6 +283,8 @@ async function callAiForPlan(context) {
         const planType = String(p.type || 'plant_harvest');
         if (planType === 'buy_seed') {
             if (!p.plantId || !p.buyCount) parsed.plan = null;
+        } else if (planType === 'sell_items') {
+            // sell_items 只需要 type 字段，无需其他验证
         } else {
             // plant_harvest (default)
             if (!p.seedId || !Array.isArray(p.landIds) || p.landIds.length === 0 || !p.rounds) {
@@ -375,6 +379,22 @@ async function runPlanner() {
         return;
     }
 
+    if (planType === 'sell_items') {
+        log('ai-planner', 'AI 规划(出售): 直接出售背包果实', {
+            module: 'ai-planner', event: 'plan_received', plan,
+        });
+        addDecisionLog({
+            type: 'plan',
+            planType: 'sell_items',
+            reason: plan.reason,
+            tasks: aiResult.tasks,
+            allTasks: context.allTasks,
+        });
+        plannerState.currentPlan = { planType: 'sell_items', remainingRounds: 1, rounds: 1, estimatedMinutes: 0 };
+        await executeSellItems(context);
+        return;
+    }
+
     log('ai-planner', `AI 规划: 使用 ${plan.seedName}(${plan.seedId}) 在 ${plan.landIds.length} 块土地执行 ${plan.rounds} 轮，预计 ${plan.estimatedMinutes} 分钟`, {
         module: 'ai-planner', event: 'plan_received', plan,
     });
@@ -411,6 +431,29 @@ async function runPlanner() {
  * 执行购买种子计划（buy_seed 类型）
  * plantId 是游戏内的 plant_id，需要先查商店找到对应的 goods_id
  */
+async function executeSellItems(context) {
+    const { sellAllFruits } = require('./warehouse');
+    try {
+        log('ai-planner', '出售背包果实...', { module: 'ai-planner', event: 'sell_items_start' });
+        await sellAllFruits();
+        log('ai-planner', '出售完成', { module: 'ai-planner', event: 'sell_items_done' });
+        addDecisionLog({ type: 'complete', reason: '出售果实完成' });
+        await checkAndClaimTasks(true);
+        setTimeout(() => {
+            runPlanner().catch((e) => {
+                logWarn('ai-planner', `出售后续规划异常: ${e.message}`, { module: 'ai-planner', event: 'replan_error' });
+            });
+        }, 5000);
+    } catch (e) {
+        logWarn('ai-planner', `出售失败: ${e.message}`, { module: 'ai-planner', event: 'sell_items_error' });
+        plannerState.lastError = e.message;
+        addDecisionLog({ type: 'error', reason: `出售失败: ${e.message}` });
+    } finally {
+        plannerState.currentPlan = null;
+        plannerState.running = false;
+    }
+}
+
 async function executeBuySeed(plan, context) {
     const { getShopInfo, buyGoods } = require('./farm');
     const SEED_SHOP_ID = 2; // 种子商店 ID
