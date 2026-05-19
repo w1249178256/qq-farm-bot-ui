@@ -235,6 +235,8 @@ async function callAiForPlan(context) {
     const response = await chat(messages, config);
     const text = response.content.trim();
 
+    log('ai-planner', `AI 原始响应: ${text.slice(0, 500)}`, { module: 'ai-planner', event: 'ai_raw_response' });
+
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
         throw new Error(`ai-planner: AI 返回内容无法解析为 JSON: ${text.slice(0, 200)}`);

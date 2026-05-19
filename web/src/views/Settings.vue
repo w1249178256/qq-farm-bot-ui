@@ -550,7 +550,12 @@ function syncLocalSettings() {
       localRuntimeClient.value = JSON.parse(JSON.stringify(settings.value.runtimeClient))
     }
     if (settings.value.aiPlanner) {
-      localAiPlanner.value = JSON.parse(JSON.stringify(settings.value.aiPlanner))
+      const ap = JSON.parse(JSON.stringify(settings.value.aiPlanner))
+      // apiKey 从服务端返回时是 '***'，保留本地已填写的值不覆盖
+      if (ap.apiKey === '***') {
+        ap.apiKey = localAiPlanner.value.apiKey || ''
+      }
+      localAiPlanner.value = ap
     }
   }
 }

@@ -212,6 +212,9 @@ export const useSettingStore = defineStore('setting', () => {
             device_id: 'iPhone X<iPhone18,3>',
           },
         }
+        if (d.aiPlanner) {
+          settings.value.aiPlanner = d.aiPlanner as AiPlannerConfig
+        }
       }
     }
     finally {

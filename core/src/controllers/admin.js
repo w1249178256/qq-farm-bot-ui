@@ -844,7 +844,9 @@ function startAdminServer(dataProvider) {
             const runtimeClient = store.getRuntimeClientConfig
                 ? store.getRuntimeClientConfig()
                 : null;
-            res.json({ ok: true, data: { intervals, strategy, preferredSeed, bagSeedPriority, friendBlockLevel, friendQuietHours, automation, ui, offlineReminder, qrLogin, runtimeClient } });
+            const aiPlannerRaw = store.getAiPlannerConfig ? store.getAiPlannerConfig() : null;
+            const aiPlanner = aiPlannerRaw ? { ...aiPlannerRaw, apiKey: aiPlannerRaw.apiKey ? '***' : '' } : null;
+            res.json({ ok: true, data: { intervals, strategy, preferredSeed, bagSeedPriority, friendBlockLevel, friendQuietHours, automation, ui, offlineReminder, qrLogin, runtimeClient, aiPlanner } });
         } catch (e) {
             res.status(500).json({ ok: false, error: e.message });
         }
