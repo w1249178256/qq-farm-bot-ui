@@ -441,8 +441,20 @@ module.exports = {
         try {
             const reply = await getTaskInfo();
             const ti = reply && reply.task_info ? reply.task_info : {};
-            const growthList = Array.isArray(ti.growth_tasks) ? ti.growth_tasks : [];
-            const tasks = growthList.map((t) => {
+            // 成长任务同时存在于 growth_tasks（field 1）和 tasks（field 3，task_type=1）
+            const fromGrowth = Array.isArray(ti.growth_tasks) ? ti.growth_tasks : [];
+            const fromTasks = Array.isArray(ti.tasks)
+                ? ti.tasks.filter(t => toNum(t && t.task_type) === 1)
+                : [];
+            // 合并去重
+            const seen = new Set();
+            const combined = [...fromGrowth, ...fromTasks].filter(t => {
+                const id = toNum(t && t.id);
+                if (!id || seen.has(id)) return false;
+                seen.add(id);
+                return true;
+            });
+            const tasks = combined.map((t) => {
                 const progress = Math.max(0, toNum(t && t.progress));
                 const totalProgress = Math.max(0, toNum(t && t.total_progress));
                 const isClaimed = !!(t && t.is_claimed);
@@ -456,6 +468,8 @@ module.exports = {
                     isClaimed,
                     isUnlocked,
                     isCompleted,
+                    params: Array.isArray(t && t.params) ? t.params : [],
+                    condType: toNum(t && t.cond_type),
                 };
             });
             const totalCount = tasks.length;
