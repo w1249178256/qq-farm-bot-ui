@@ -561,6 +561,10 @@ function syncLocalSettings() {
 }
 
 async function loadData() {
+  // aiPlanner 是全局配置，不依赖账号，始终加载
+  await settingStore.fetchAiPlannerConfig()
+  syncLocalSettings()
+
   if (currentAccountId.value) {
     await settingStore.fetchSettings(currentAccountId.value)
     syncLocalSettings()
