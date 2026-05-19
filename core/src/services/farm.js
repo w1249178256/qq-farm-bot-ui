@@ -1840,4 +1840,6 @@ module.exports = {
     harvest,
     autoPlantEmptyLands,
     findBestSeed,
+    getShopInfo,
+    buyGoods,
 };
