@@ -31,6 +31,8 @@ const FAST_SEEDS = [
 
 // ============ 内存状态 ============
 
+const MAX_DECISION_LOG = 20;
+
 let plannerState = {
     running: false,
     lastTriggeredAt: 0,
@@ -38,9 +40,17 @@ let plannerState = {
     currentPlan: null,
     lastError: null,
     lastTasksCompleted: [],
+    decisionLog: [],
 };
 
 let plannerTimer = null;
+
+function addDecisionLog(entry) {
+    plannerState.decisionLog.unshift({ ...entry, time: Date.now() });
+    if (plannerState.decisionLog.length > MAX_DECISION_LOG) {
+        plannerState.decisionLog.length = MAX_DECISION_LOG;
+    }
+}
 
 // ============ 调度器 ============
 
@@ -70,6 +80,7 @@ function getPlannerStatus() {
         currentPlan: plannerState.currentPlan ? { ...plannerState.currentPlan } : null,
         lastError: plannerState.lastError,
         lastTasksCompleted: [...plannerState.lastTasksCompleted],
+        decisionLog: [...plannerState.decisionLog],
     };
 }
 
@@ -132,31 +143,44 @@ async function collectContext() {
     }
 
     let incompleteTasks = [];
+    let allTasksSnapshot = [];
     try {
-        const { getGrowthTaskStateLikeApp } = require('./task');
-        const taskState = await getGrowthTaskStateLikeApp();
-        const allTasks = Array.isArray(taskState && taskState.tasks) ? taskState.tasks : [];
-        incompleteTasks = allTasks
-            .filter((t) => {
-                // Support both camelCase (from real API) and snake_case (from mocks/legacy)
-                const progress = toNum(t && (t.progress));
-                const totalProgress = toNum(t && (t.totalProgress || t.total_progress));
-                const isClaimed = !!(t && (t.isClaimed || t.is_claimed));
-                return !isClaimed && totalProgress > 0 && progress < totalProgress;
-            })
-            .map((t) => ({
-                id: toNum(t.id),
-                desc: String(t.desc || t.name || ''),
-                progress: toNum(t.progress),
-                totalProgress: toNum(t.totalProgress || t.total_progress),
-                condType: toNum(t.condType || t.cond_type),
-            }));
+        const { getTaskInfo } = require('./task');
+        const reply = await getTaskInfo();
+        const ti = reply && reply.task_info ? reply.task_info : {};
+        // 成长任务同时存在于 growth_tasks（field 1）和 tasks（field 3）
+        const combined = [
+            ...(Array.isArray(ti.growth_tasks) ? ti.growth_tasks : []),
+            ...(Array.isArray(ti.tasks) ? ti.tasks : []),
+        ];
+        // 去重（按 id）
+        const seen = new Set();
+        const deduped = combined.filter((t) => {
+            const id = toNum(t && t.id);
+            if (!id || seen.has(id)) return false;
+            seen.add(id);
+            return true;
+        });
+        allTasksSnapshot = deduped.map((t) => ({
+            id: toNum(t.id),
+            desc: String(t.desc || ''),
+            progress: toNum(t.progress),
+            totalProgress: toNum(t.total_progress),
+            isClaimed: !!t.is_claimed,
+            isUnlocked: !!t.is_unlocked,
+            condType: toNum(t.cond_type),
+        }));
+        incompleteTasks = allTasksSnapshot.filter((t) =>
+            t.isUnlocked && !t.isClaimed && t.totalProgress > 0 && t.progress < t.totalProgress
+        );
     } catch {
         incompleteTasks = [];
+        allTasksSnapshot = [];
     }
 
     return {
         tasks: incompleteTasks,
+        allTasks: allTasksSnapshot,
         lands: landSummary,
         seeds: shopSeeds,
         bagSeeds,
@@ -255,6 +279,7 @@ async function triggerPlanner() {
         return { ok: true, message: '规划已触发', status: getPlannerStatus() };
     } catch (e) {
         plannerState.lastError = e.message;
+        addDecisionLog({ type: 'error', reason: e.message });
         return { ok: false, message: e.message, status: getPlannerStatus() };
     } finally {
         plannerState.running = false;
@@ -270,6 +295,7 @@ async function runPlanner() {
 
     if (context.tasks.length === 0) {
         log('ai-planner', '没有未完成的成长任务，跳过规划', { module: 'ai-planner', event: 'no_tasks' });
+        addDecisionLog({ type: 'skip', reason: '没有未完成的成长任务', allTasks: context.allTasks });
         return;
     }
 
@@ -282,12 +308,24 @@ async function runPlanner() {
 
     if (!aiResult.plan) {
         log('ai-planner', 'AI 判断无可推进任务', { module: 'ai-planner', event: 'no_plan' });
+        addDecisionLog({ type: 'skip', reason: 'AI 判断无可推进任务', skipped: aiResult.skipped });
         return;
     }
 
     const plan = aiResult.plan;
     log('ai-planner', `AI 规划: 使用 ${plan.seedName}(${plan.seedId}) 在 ${plan.landIds.length} 块土地执行 ${plan.rounds} 轮，预计 ${plan.estimatedMinutes} 分钟`, {
         module: 'ai-planner', event: 'plan_received', plan,
+    });
+    addDecisionLog({
+        type: 'plan',
+        seedName: plan.seedName,
+        seedId: plan.seedId,
+        landIds: plan.landIds,
+        rounds: plan.rounds,
+        estimatedMinutes: plan.estimatedMinutes,
+        reason: plan.reason,
+        tasks: aiResult.tasks,
+        allTasks: context.allTasks,
     });
 
     plannerState.currentPlan = {
@@ -384,6 +422,7 @@ function executeStepsSequentially(steps, stepIndex = 0) {
         plannerState.currentPlan = null;
         plannerState.running = false;
         log('ai-planner', '所有步骤执行完毕', { module: 'ai-planner', event: 'plan_complete' });
+        addDecisionLog({ type: 'complete', reason: '计划执行完毕' });
         return;
     }
 

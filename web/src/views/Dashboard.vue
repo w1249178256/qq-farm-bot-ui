@@ -10,11 +10,13 @@ import { useAccountStore } from '@/stores/account'
 import { useBagStore } from '@/stores/bag'
 import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
+import { useSettingStore } from '@/stores/setting'
 
 const statusStore = useStatusStore()
 const accountStore = useAccountStore()
 const bagStore = useBagStore()
 const toastStore = useToastStore()
+const settingStore = useSettingStore()
 const {
   status,
   logs: statusLogs,
@@ -29,6 +31,38 @@ const lastBagFetchAt = ref(0)
 const clearLogsLoading = ref(false)
 const clearLogsConfirmVisible = ref(false)
 const clearLogsConfirmLoading = ref(false)
+
+// AI 规划器状态
+const aiPlannerStatus = ref<any>(null)
+const aiPlannerTriggering = ref(false)
+
+async function refreshAiPlannerStatus() {
+  if (!currentAccountId.value) return
+  try {
+    const res = await settingStore.fetchAiPlannerStatus(currentAccountId.value)
+    if (res && res.ok) aiPlannerStatus.value = res.data
+  } catch {}
+}
+
+async function handleTriggerAiPlanner() {
+  if (!currentAccountId.value) return
+  aiPlannerTriggering.value = true
+  try {
+    const res = await settingStore.triggerAiPlanner(currentAccountId.value)
+    if (res && res.ok) {
+      toastStore.success('AI 规划已触发')
+      setTimeout(refreshAiPlannerStatus, 1500)
+    } else {
+      toastStore.error((res && res.message) || '触发失败')
+    }
+  } catch (e: any) {
+    toastStore.error(e.message || '触发失败')
+  } finally {
+    aiPlannerTriggering.value = false
+  }
+}
+
+const aiPlannerEnabled = computed(() => settingStore.settings?.aiPlanner?.enabled ?? false)
 
 const allLogs = computed(() => {
   const sLogs = statusLogs.value || []
@@ -448,12 +482,15 @@ watch(allLogs, () => {
 onMounted(() => {
   statusStore.setRealtimeLogsEnabled(!hasActiveLogFilter.value)
   refresh()
+  refreshAiPlannerStatus()
 })
 
 // Auto refresh fallback every 10s (WS 断开或筛选条件启用时会回退 HTTP)
 useIntervalFn(refresh, 10000)
 // Countdown timer (every 1s)
 useIntervalFn(updateCountdowns, 1000)
+// AI 规划器状态每 30s 刷新一次
+useIntervalFn(refreshAiPlannerStatus, 30000)
 </script>
 
 <template>
@@ -705,6 +742,139 @@ useIntervalFn(updateCountdowns, 1000)
                 {{ nextFriendCheck }}
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- AI 规划器状态 -->
+        <div v-if="aiPlannerEnabled" class="flex flex-col rounded-lg bg-white p-4 shadow dark:bg-gray-800">
+          <div class="mb-3 flex items-center justify-between">
+            <h3 class="flex items-center gap-2 text-base font-medium">
+              <div class="i-carbon-machine-learning-model text-purple-500" />
+              <span>AI 任务规划</span>
+            </h3>
+            <BaseButton
+              size="sm"
+              variant="secondary"
+              :loading="aiPlannerTriggering"
+              @click="handleTriggerAiPlanner"
+            >
+              立即规划
+            </BaseButton>
+          </div>
+
+          <!-- 当前执行中的计划 -->
+          <div v-if="aiPlannerStatus?.currentPlan" class="mb-3 rounded-md bg-purple-50 p-3 text-xs dark:bg-purple-900/20">
+            <div class="mb-1 flex items-center gap-1 font-medium text-purple-700 dark:text-purple-300">
+              <div class="i-carbon-in-progress" />
+              执行中
+            </div>
+            <div class="text-gray-700 dark:text-gray-300">
+              {{ aiPlannerStatus.currentPlan.seedName }} × {{ aiPlannerStatus.currentPlan.landIds?.length }} 块地
+            </div>
+            <div class="text-gray-500">
+              剩余 {{ aiPlannerStatus.currentPlan.remainingRounds }}/{{ aiPlannerStatus.currentPlan.rounds }} 轮
+            </div>
+          </div>
+
+          <!-- 最近错误 -->
+          <div v-if="aiPlannerStatus?.lastError" class="mb-3 rounded-md bg-red-50 p-2 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400">
+            <div class="flex items-center gap-1">
+              <div class="i-carbon-warning-filled" />
+              {{ aiPlannerStatus.lastError }}
+            </div>
+          </div>
+
+          <!-- 最近一次决策的任务列表 + 方案 -->
+          <template v-if="aiPlannerStatus?.decisionLog?.length">
+            <div class="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+              最近决策
+            </div>
+            <div class="mb-3 rounded-md bg-gray-50 p-3 text-xs dark:bg-gray-700/50">
+              <!-- 最新一条决策 -->
+              <template v-if="aiPlannerStatus.decisionLog[0]">
+                <!-- 有方案 -->
+                <template v-if="aiPlannerStatus.decisionLog[0].type === 'plan'">
+                  <div class="mb-2 flex items-center gap-1 font-medium text-green-600 dark:text-green-400">
+                    <div class="i-carbon-checkmark-filled" />
+                    已生成方案
+                  </div>
+                  <div class="mb-1 text-gray-700 dark:text-gray-300">
+                    {{ aiPlannerStatus.decisionLog[0].seedName }} × {{ aiPlannerStatus.decisionLog[0].landIds?.length }} 块 × {{ aiPlannerStatus.decisionLog[0].rounds }} 轮（约 {{ aiPlannerStatus.decisionLog[0].estimatedMinutes }} 分钟）
+                  </div>
+                  <div v-if="aiPlannerStatus.decisionLog[0].reason" class="mb-2 text-gray-400 italic">
+                    "{{ aiPlannerStatus.decisionLog[0].reason }}"
+                  </div>
+                </template>
+                <!-- 跳过 -->
+                <template v-else-if="aiPlannerStatus.decisionLog[0].type === 'skip'">
+                  <div class="mb-2 flex items-center gap-1 text-gray-500">
+                    <div class="i-carbon-subtract-filled" />
+                    {{ aiPlannerStatus.decisionLog[0].reason }}
+                  </div>
+                </template>
+                <!-- 完成 -->
+                <template v-else-if="aiPlannerStatus.decisionLog[0].type === 'complete'">
+                  <div class="mb-2 flex items-center gap-1 text-blue-500">
+                    <div class="i-carbon-checkmark-outline" />
+                    计划执行完毕
+                  </div>
+                </template>
+
+                <!-- 任务列表（来自最新决策） -->
+                <div
+                  v-if="aiPlannerStatus.decisionLog[0].allTasks?.length"
+                  class="mt-2 flex flex-col gap-1 border-t border-gray-200 pt-2 dark:border-gray-600"
+                >
+                  <div class="mb-1 text-gray-400">成长任务进度</div>
+                  <div
+                    v-for="t in aiPlannerStatus.decisionLog[0].allTasks"
+                    :key="t.id"
+                    class="flex items-center gap-2"
+                  >
+                    <div
+                      class="shrink-0"
+                      :class="t.isClaimed ? 'i-carbon-checkmark-filled text-green-500' : t.progress >= t.totalProgress ? 'i-carbon-checkmark-outline text-blue-400' : 'i-carbon-circle-dash text-gray-400'"
+                    />
+                    <div class="min-w-0 flex-1 truncate text-gray-600 dark:text-gray-400">
+                      {{ t.desc }}
+                    </div>
+                    <div class="shrink-0 text-gray-400">
+                      {{ t.progress }}/{{ t.totalProgress }}
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <!-- 历史决策时间线（最近3条，不含第一条） -->
+            <div class="flex flex-col gap-1">
+              <div
+                v-for="(entry, i) in aiPlannerStatus.decisionLog.slice(1, 4)"
+                :key="i"
+                class="flex items-center gap-2 text-xs text-gray-400"
+              >
+                <span class="shrink-0">
+                  <span v-if="entry.type === 'plan'" class="i-carbon-checkmark-filled text-green-400" />
+                  <span v-else-if="entry.type === 'complete'" class="i-carbon-checkmark-outline text-blue-400" />
+                  <span v-else-if="entry.type === 'error'" class="i-carbon-warning-filled text-red-400" />
+                  <span v-else class="i-carbon-subtract-filled" />
+                </span>
+                <span class="flex-1 truncate">
+                  <span v-if="entry.type === 'plan'">规划: {{ entry.seedName }} ×{{ entry.rounds }}轮</span>
+                  <span v-else-if="entry.type === 'complete'">执行完毕</span>
+                  <span v-else-if="entry.type === 'error'">{{ entry.reason }}</span>
+                  <span v-else>{{ entry.reason }}</span>
+                </span>
+                <span class="shrink-0">{{ entry.time ? new Date(entry.time).toLocaleTimeString() : '' }}</span>
+              </div>
+            </div>
+          </template>
+
+          <div v-else-if="aiPlannerStatus" class="text-xs text-gray-400">
+            暂无规划记录，点击「立即规划」触发一次
+          </div>
+          <div v-else class="text-xs text-gray-400">
+            加载中...
           </div>
         </div>
 
