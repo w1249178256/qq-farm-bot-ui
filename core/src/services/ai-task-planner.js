@@ -247,8 +247,6 @@ async function callAiForPlan(context) {
     const response = await chat(messages, config);
     const text = response.content.trim();
 
-    log('ai-planner', `AI 原始响应: ${text.slice(0, 500)}`, { module: 'ai-planner', event: 'ai_raw_response' });
-
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
         throw new Error(`ai-planner: AI 返回内容无法解析为 JSON: ${text.slice(0, 200)}`);
@@ -428,6 +426,12 @@ async function executeBuySeed(plan, context) {
         });
         addDecisionLog({ type: 'complete', reason: `购买 ${plan.seedName} × ${buyCount} 完成` });
         await checkAndClaimTasks(true);
+        // 购买完成后延迟 5 秒再次规划，推进下一个任务
+        setTimeout(() => {
+            runPlanner().catch((e) => {
+                logWarn('ai-planner', `购买后续规划异常: ${e.message}`, { module: 'ai-planner', event: 'replan_error' });
+            });
+        }, 5000);
     } catch (e) {
         logWarn('ai-planner', `购买种子失败: ${e.message}`, { module: 'ai-planner', event: 'buy_seed_error' });
         plannerState.lastError = e.message;
@@ -518,6 +522,12 @@ function executeStepsSequentially(steps, stepIndex = 0) {
         plannerState.running = false;
         log('ai-planner', '所有步骤执行完毕', { module: 'ai-planner', event: 'plan_complete' });
         addDecisionLog({ type: 'complete', reason: '计划执行完毕' });
+        // 执行完毕后延迟 5 秒再次规划，检查是否还有未完成任务
+        setTimeout(() => {
+            runPlanner().catch((e) => {
+                logWarn('ai-planner', `计划后续规划异常: ${e.message}`, { module: 'ai-planner', event: 'replan_error' });
+            });
+        }, 5000);
         return;
     }
 
