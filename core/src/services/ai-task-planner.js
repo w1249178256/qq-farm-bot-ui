@@ -111,17 +111,27 @@ async function collectContext() {
     const landSummary = unlockedLands.map((l) => {
         const id = toNum(l.id);
         const plant = l.plant;
-        if (!plant || !toNum(plant.seed_id)) {
-            return { id, status: 'empty', plantName: null, matureInSec: null };
+        if (!plant || !Array.isArray(plant.phases) || plant.phases.length === 0) {
+            return { id, status: 'empty', plantName: null, matureInSec: null, hasMutant: false, canRemove: true };
         }
         const matureTime = toNum(plant.mature_time);
         const matureInSec = matureTime > 0 ? Math.max(0, matureTime - nowSec) : 0;
         const isMature = matureInSec === 0 && toNum(plant.seed_id) > 0;
+        const hasMutant = Array.isArray(plant.mutant_config_ids) && plant.mutant_config_ids.length > 0;
+        // 不可铲除：有变异、距成熟不足5分钟、稀有种子（seed_id >= 20200）
+        const seedId = toNum(plant.seed_id);
+        const isRareSeed = seedId >= 20200;
+        const almostMature = matureInSec > 0 && matureInSec < 300;
+        const canRemove = !hasMutant && !isRareSeed && !almostMature;
         return {
             id,
             status: isMature ? 'mature' : 'growing',
             plantName: String(plant.name || ''),
             matureInSec,
+            hasMutant,
+            isRareSeed,
+            almostMature,
+            canRemove,
         };
     });
 
@@ -225,11 +235,12 @@ const SYSTEM_PROMPT = `你是一个农场游戏任务规划器。根据当前状
 1. condType=7（购买种子）→ 必须用 buy_seed，plantId=params[0]，buyCount=totalProgress-progress
 2. condType=3/6（出售）→ 优先用 sell_items 直接出售背包果实，无需种植
 3. condType=1/2/4/5（收获/种植）→ 用 plant_harvest，选最快成熟的种子（白萝卜1分钟），rounds=ceil((totalProgress-progress)/landCount)
-4. plant_harvest 只能动用 maxActionLands 块土地（不超过总土地的 1/3），优先选成熟时间最短的种子
-5. plant_harvest 只能使用"空地"或"已成熟"状态的土地，不铲除正在生长的作物
-6. condType=16/18（登录/互动）→ 跳过，无法主动推进
-7. 跳过无法主动推进的任务（升级/扩建/等级提升等）
-8. 输出严格的 JSON，不要解释
+4. plant_harvest 只能动用 maxActionLands 块土地（不超过总土地的 1/3）
+5. 优先选 status=empty 的土地；status=growing 且 canRemove=true 的土地也可以选（执行时会先铲除）
+6. 绝对不能选 canRemove=false 的土地（有变异/稀有种子/快成熟）
+7. condType=16/18（登录/互动）→ 跳过，无法主动推进
+8. 跳过无法主动推进的任务（升级/扩建/等级提升等）
+9. 输出严格的 JSON，不要解释
 
 示例1（购买任务）：
 任务: {"id":100035,"desc":"购买8个玉米种子","condType":7,"params":["20004"],"progress":0,"totalProgress":8}
@@ -508,24 +519,32 @@ function buildSteps(plan, context) {
     const steps = [];
     const { seedId, rounds, growMinutes } = plan;
 
-    // 只选当前空地或已成熟的土地，不碰正在生长的
-    const actionableLandIds = (plan.landIds || []).filter((id) => {
-        const land = context.lands.find((l) => l.id === id);
-        return land && (land.status === 'empty' || land.status === 'mature');
-    });
+    // 分类土地：空地、已成熟、可铲除的生长中
+    const emptyLandIds = [];
+    const matureLandIds = [];
+    const removableLandIds = [];
 
+    for (const id of (plan.landIds || [])) {
+        const land = context.lands.find((l) => l.id === id);
+        if (!land) continue;
+        if (land.status === 'empty') emptyLandIds.push(id);
+        else if (land.status === 'mature') matureLandIds.push(id);
+        else if (land.status === 'growing' && land.canRemove) removableLandIds.push(id);
+    }
+
+    const actionableLandIds = [...emptyLandIds, ...matureLandIds, ...removableLandIds];
     if (actionableLandIds.length === 0) return steps;
 
-    // 预收获已成熟的土地，让它们变空
-    const matureLandIds = actionableLandIds.filter((id) => {
-        const land = context.lands.find((l) => l.id === id);
-        return land && land.status === 'mature';
-    });
+    // 预处理：收获成熟土地
     if (matureLandIds.length > 0) {
         steps.push({ type: 'harvest', landIds: matureLandIds, label: '预收获成熟土地' });
     }
+    // 预处理：铲除可铲除的生长中土地
+    if (removableLandIds.length > 0) {
+        steps.push({ type: 'remove', landIds: removableLandIds, label: '铲除可替换作物' });
+    }
 
-    // 每轮：种植 → 等待 → 收获（收获后土地自动变空，下一轮可以继续种）
+    // 每轮：种植 → 等待 → 收获
     for (let i = 0; i < rounds; i++) {
         steps.push({ type: 'plant', seedId, landIds: actionableLandIds, label: `第 ${i + 1}/${rounds} 轮种植` });
         steps.push({ type: 'wait', minutes: growMinutes, label: `等待 ${growMinutes} 分钟成熟` });
@@ -552,13 +571,15 @@ async function executeStep(step) {
         }
         case 'plant': {
             if (!step.landIds || step.landIds.length === 0) break;
-            // 种植前重新查一次土地状态，只种当前为空的土地
+            // 种植前重新查一次土地状态，只种当前为空的土地（无作物或作物阶段为空）
             let targetLandIds = step.landIds.map(Number);
             try {
                 const landsReply = await getAllLands();
                 const currentLands = Array.isArray(landsReply && landsReply.lands) ? landsReply.lands : [];
                 const emptyIds = new Set(
-                    currentLands.filter(l => l && l.unlocked && (!l.plant || !l.plant.seed_id)).map(l => toNum(l.id))
+                    currentLands
+                        .filter(l => l && l.unlocked && (!l.plant || !Array.isArray(l.plant.phases) || l.plant.phases.length === 0))
+                        .map(l => toNum(l.id))
                 );
                 targetLandIds = targetLandIds.filter(id => emptyIds.has(id));
             } catch { /* 查询失败则用原始列表 */ }
@@ -569,6 +590,14 @@ async function executeStep(step) {
             await plantSeeds(step.seedId, targetLandIds);
             log('ai-planner', `种植完成，种子: ${step.seedId}，土地: ${targetLandIds.join(',')}`, {
                 module: 'ai-planner', event: 'plant_done', seedId: step.seedId,
+            });
+            break;
+        }
+        case 'remove': {
+            if (!step.landIds || step.landIds.length === 0) break;
+            await removePlant(step.landIds.map(Number));
+            log('ai-planner', `铲除完成，土地: ${step.landIds.join(',')}`, {
+                module: 'ai-planner', event: 'remove_done', landIds: step.landIds,
             });
             break;
         }

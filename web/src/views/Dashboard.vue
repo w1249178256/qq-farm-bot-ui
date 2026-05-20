@@ -482,7 +482,10 @@ watch(allLogs, () => {
 onMounted(() => {
   statusStore.setRealtimeLogsEnabled(!hasActiveLogFilter.value)
   refresh()
-  refreshAiPlannerStatus()
+  // 加载 AI 规划器配置（全局配置，不依赖账号）
+  settingStore.fetchAiPlannerConfig().then(() => {
+    refreshAiPlannerStatus()
+  })
 })
 
 // Auto refresh fallback every 10s (WS 断开或筛选条件启用时会回退 HTTP)
