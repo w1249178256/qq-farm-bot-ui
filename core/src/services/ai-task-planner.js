@@ -6,7 +6,7 @@
 'use strict';
 
 const { toNum, log, logWarn, getServerTimeSec } = require('../utils/utils');
-const { getUserState } = require('../utils/network');
+const { getUserState, networkEvents } = require('../utils/network');
 const { getAiPlannerConfig } = require('../models/store');
 const { chat } = require('./ai-client');
 const {
@@ -54,6 +54,17 @@ function addDecisionLog(entry) {
 
 // ============ 调度器 ============
 
+function onTaskInfoNotify(taskInfo) {
+    const config = getAiPlannerConfig();
+    if (!config.enabled || plannerState.running) return;
+    // 服务器推送新任务时，延迟 3 秒触发规划（等推送数据稳定）
+    setTimeout(() => {
+        runPlanner().catch((e) => {
+            logWarn('ai-planner', `推送触发规划异常: ${e.message}`, { module: 'ai-planner', event: 'notify_replan_error' });
+        });
+    }, 3000);
+}
+
 function startPlannerLoop() {
     stopPlannerLoop();
     plannerTimer = setInterval(() => {
@@ -61,7 +72,8 @@ function startPlannerLoop() {
             logWarn('ai-planner', `定时规划异常: ${e.message}`, { module: 'ai-planner', event: 'timer_error' });
         });
     }, PLANNER_INTERVAL_MS);
-    log('ai-planner', 'AI 任务规划器已启动（每 30 分钟触发）', { module: 'ai-planner', event: 'start' });
+    networkEvents.on('taskInfoNotify', onTaskInfoNotify);
+    log('ai-planner', 'AI 任务规划器已启动（每 30 分钟触发，监听任务推送）', { module: 'ai-planner', event: 'start' });
 }
 
 function stopPlannerLoop() {
@@ -70,6 +82,7 @@ function stopPlannerLoop() {
         plannerTimer = null;
         log('ai-planner', 'AI 任务规划器已停止', { module: 'ai-planner', event: 'stop' });
     }
+    networkEvents.off('taskInfoNotify', onTaskInfoNotify);
 }
 
 function getPlannerStatus() {
@@ -153,11 +166,13 @@ async function collectContext() {
             ...(Array.isArray(ti.growth_tasks) ? ti.growth_tasks : []),
             ...(Array.isArray(ti.tasks) ? ti.tasks : []),
         ];
-        // 去重（按 id）
+        // 去重（按 id），只保留成长任务（task_type=1），过滤每日任务（task_type=2）
         const seen = new Set();
         const deduped = combined.filter((t) => {
             const id = toNum(t && t.id);
+            const taskType = toNum(t && t.task_type);
             if (!id || seen.has(id)) return false;
+            if (taskType === 2) return false; // 跳过每日任务
             seen.add(id);
             return true;
         });
@@ -439,11 +454,6 @@ async function executeSellItems(context) {
         log('ai-planner', '出售完成', { module: 'ai-planner', event: 'sell_items_done' });
         addDecisionLog({ type: 'complete', reason: '出售果实完成' });
         await checkAndClaimTasks(true);
-        setTimeout(() => {
-            runPlanner().catch((e) => {
-                logWarn('ai-planner', `出售后续规划异常: ${e.message}`, { module: 'ai-planner', event: 'replan_error' });
-            });
-        }, 5000);
     } catch (e) {
         logWarn('ai-planner', `出售失败: ${e.message}`, { module: 'ai-planner', event: 'sell_items_error' });
         plannerState.lastError = e.message;
@@ -484,12 +494,6 @@ async function executeBuySeed(plan, context) {
         });
         addDecisionLog({ type: 'complete', reason: `购买 ${plan.seedName} × ${buyCount} 完成` });
         await checkAndClaimTasks(true);
-        // 购买完成后延迟 5 秒再次规划，推进下一个任务
-        setTimeout(() => {
-            runPlanner().catch((e) => {
-                logWarn('ai-planner', `购买后续规划异常: ${e.message}`, { module: 'ai-planner', event: 'replan_error' });
-            });
-        }, 5000);
     } catch (e) {
         logWarn('ai-planner', `购买种子失败: ${e.message}`, { module: 'ai-planner', event: 'buy_seed_error' });
         plannerState.lastError = e.message;
@@ -580,12 +584,6 @@ function executeStepsSequentially(steps, stepIndex = 0) {
         plannerState.running = false;
         log('ai-planner', '所有步骤执行完毕', { module: 'ai-planner', event: 'plan_complete' });
         addDecisionLog({ type: 'complete', reason: '计划执行完毕' });
-        // 执行完毕后延迟 5 秒再次规划，检查是否还有未完成任务
-        setTimeout(() => {
-            runPlanner().catch((e) => {
-                logWarn('ai-planner', `计划后续规划异常: ${e.message}`, { module: 'ai-planner', event: 'replan_error' });
-            });
-        }, 5000);
         return;
     }
 
