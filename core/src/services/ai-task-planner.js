@@ -212,19 +212,19 @@ async function collectContext() {
 const SYSTEM_PROMPT = `你是一个农场游戏任务规划器。根据当前状态，制定最小代价的任务推进计划。
 
 任务字段说明：
-- condType: 任务条件类型。7=购买种子, 1=收获次数, 2=种植次数, 3=出售金币/次数, 16=登录, 17=采摘, 18=互动好友
+- condType: 任务条件类型。7=购买种子, 1/4=收获次数, 2/5=种植次数, 3/6=出售金币/次数, 16=登录, 17=采摘, 18=互动好友
 - params: 任务参数。condType=7时，params[0]是种子的plantId（如"20004"=玉米）
 - progress/totalProgress: 当前进度/目标进度
 
 可执行的操作类型：
 - buy_seed：购买种子（condType=7，params[0]是plantId）
-- sell_items：直接出售背包里的果实（condType=3出售类任务，优先用此方式）
-- plant_harvest：种植并收获（condType=1/2收获/种植类任务，或背包无果实时的出售任务）
+- sell_items：直接出售背包里的果实（condType=3/6出售类任务，优先用此方式）
+- plant_harvest：种植并收获（condType=1/2/4/5收获/种植类任务）
 
 规则：
 1. condType=7（购买种子）→ 必须用 buy_seed，plantId=params[0]，buyCount=totalProgress-progress
-2. condType=3（出售）→ 优先用 sell_items 直接出售背包果实，无需种植
-3. condType=1/2（收获/种植）→ 用 plant_harvest，选最快成熟的种子，rounds=max(1, ceil((totalProgress-progress)/landCount))
+2. condType=3/6（出售）→ 优先用 sell_items 直接出售背包果实，无需种植
+3. condType=1/2/4/5（收获/种植）→ 用 plant_harvest，选最快成熟的种子（白萝卜1分钟），rounds=ceil((totalProgress-progress)/landCount)
 4. plant_harvest 只能动用 maxActionLands 块土地（不超过总土地的 1/3），优先选成熟时间最短的种子
 5. plant_harvest 只能使用"空地"或"已成熟"状态的土地，不铲除正在生长的作物
 6. condType=16/18（登录/互动）→ 跳过，无法主动推进
@@ -235,9 +235,9 @@ const SYSTEM_PROMPT = `你是一个农场游戏任务规划器。根据当前状
 任务: {"id":100035,"desc":"购买8个玉米种子","condType":7,"params":["20004"],"progress":0,"totalProgress":8}
 输出: {"tasks":[{"taskId":100035,"desc":"购买8个玉米种子","need":8,"done":0}],"plan":{"type":"buy_seed","plantId":20004,"seedName":"玉米种子","buyCount":8,"reason":"condType=7购买任务，直接购买"},"skipped":[]}
 
-示例2（收获任务）：
-任务: {"id":100060,"desc":"完成24次收获","condType":1,"params":[],"progress":10,"totalProgress":24}
-输出: {"tasks":[{"taskId":100060,"desc":"完成24次收获","need":24,"done":10}],"plan":{"type":"plant_harvest","seedId":20002,"seedName":"白萝卜","growMinutes":1,"landIds":[1,2,3],"rounds":5,"estimatedMinutes":5,"reason":"需要再收获14次，白萝卜1分钟最快"},"skipped":[]}
+示例2（收获任务，condType=4）：
+任务: {"id":100047,"desc":"完成9次收获","condType":4,"params":[],"progress":0,"totalProgress":9}
+输出: {"tasks":[{"taskId":100047,"desc":"完成9次收获","need":9,"done":0}],"plan":{"type":"plant_harvest","seedId":20002,"seedName":"白萝卜","growMinutes":1,"landIds":[1,2,3],"rounds":3,"estimatedMinutes":3,"reason":"condType=4收获任务，白萝卜1分钟最快，3块地×3轮=9次"},"skipped":[]}
 
 示例3（出售任务）：
 任务: {"id":100010,"desc":"售卖果实获得金币","condType":3,"params":[],"progress":500,"totalProgress":1800}
