@@ -506,24 +506,26 @@ async function executeBuySeed(plan, context) {
 
 function buildSteps(plan, context) {
     const steps = [];
-    const { seedId, landIds, rounds, growMinutes } = plan;
+    const { seedId, rounds, growMinutes } = plan;
 
-    const actionableLandIds = landIds.filter((id) => {
+    // 只选当前空地或已成熟的土地，不碰正在生长的
+    const actionableLandIds = (plan.landIds || []).filter((id) => {
         const land = context.lands.find((l) => l.id === id);
         return land && (land.status === 'empty' || land.status === 'mature');
     });
 
     if (actionableLandIds.length === 0) return steps;
 
+    // 预收获已成熟的土地，让它们变空
     const matureLandIds = actionableLandIds.filter((id) => {
         const land = context.lands.find((l) => l.id === id);
         return land && land.status === 'mature';
     });
-
     if (matureLandIds.length > 0) {
         steps.push({ type: 'harvest', landIds: matureLandIds, label: '预收获成熟土地' });
     }
 
+    // 每轮：种植 → 等待 → 收获（收获后土地自动变空，下一轮可以继续种）
     for (let i = 0; i < rounds; i++) {
         steps.push({ type: 'plant', seedId, landIds: actionableLandIds, label: `第 ${i + 1}/${rounds} 轮种植` });
         steps.push({ type: 'wait', minutes: growMinutes, label: `等待 ${growMinutes} 分钟成熟` });
@@ -550,8 +552,22 @@ async function executeStep(step) {
         }
         case 'plant': {
             if (!step.landIds || step.landIds.length === 0) break;
-            await plantSeeds(step.seedId, step.landIds.map(Number));
-            log('ai-planner', `种植完成，种子: ${step.seedId}`, {
+            // 种植前重新查一次土地状态，只种当前为空的土地
+            let targetLandIds = step.landIds.map(Number);
+            try {
+                const landsReply = await getAllLands();
+                const currentLands = Array.isArray(landsReply && landsReply.lands) ? landsReply.lands : [];
+                const emptyIds = new Set(
+                    currentLands.filter(l => l && l.unlocked && (!l.plant || !l.plant.seed_id)).map(l => toNum(l.id))
+                );
+                targetLandIds = targetLandIds.filter(id => emptyIds.has(id));
+            } catch { /* 查询失败则用原始列表 */ }
+            if (targetLandIds.length === 0) {
+                log('ai-planner', '没有空地可种植，跳过本轮', { module: 'ai-planner', event: 'plant_skip' });
+                break;
+            }
+            await plantSeeds(step.seedId, targetLandIds);
+            log('ai-planner', `种植完成，种子: ${step.seedId}，土地: ${targetLandIds.join(',')}`, {
                 module: 'ai-planner', event: 'plant_done', seedId: step.seedId,
             });
             break;
@@ -590,7 +606,7 @@ function executeStepsSequentially(steps, stepIndex = 0) {
     const step = steps[stepIndex];
 
     if (step.type === 'wait') {
-        const delayMs = Math.max(0, step.minutes * 60 * 1000);
+        const delayMs = Math.max(0, step.minutes * 60 * 1000) + 15000; // +15s 缓冲确保成熟
         log('ai-planner', `等待 ${step.minutes} 分钟后继续...`, {
             module: 'ai-planner', event: 'wait_start', minutes: step.minutes,
         });
