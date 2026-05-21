@@ -2,6 +2,294 @@
 
 基于 Node.js 的 QQ 农场自动化工具，支持多账号管理、Web 控制面板、实时日志与数据分析。
 
+> **本仓库是 [Penty-d/qq-farm-bot-ui](https://github.com/Penty-d/qq-farm-bot-ui) 的 fork 版本**，在原版基础上新增了 AI 成长任务规划器、协议分析工具、好友缓存优化等功能，并持续迭代中。
+
+[Discord](https://discord.gg/zTEhed5qpc)
+
+## 与原版的主要差异
+
+### 新增：AI 成长任务规划器
+
+接入大模型（支持 Claude / OpenAI / 自定义兼容接口），自动分析未完成的成长任务并制定执行计划：
+
+- **多模型支持**：可配置 Base URL、API Key、模型名称，兼容任何 OpenAI 格式接口
+- **智能规划**：AI 根据当前土地状态、背包种子、任务进度，生成最优执行方案
+- **自动执行**：支持购买种子（condType=7）、种植收获（condType=1/2/4/5）、出售果实（condType=3/6）三种计划类型
+- **安全边界**：最多动用 1/3 土地，保护变异作物、稀有种子、快成熟作物不被铲除
+- **事件驱动**：领取任务奖励后监听服务器推送，自动触发下一轮规划，无需等待定时器
+- **Dashboard 卡片**：概览页实时展示当前计划、任务进度、决策历史
+
+在设置页「AI 任务规划」区块配置后即可启用。
+
+### 新增：协议分析工具
+
+- 完整的 Protobuf 协议定义（38 个 proto 文件，覆盖 33 个 Service）
+- 协议解析面板：支持 hex/base64 输入，自动解码 WS 报文
+- 通过小程序包逆向补全了原版缺失的 proto 定义（skinpb、dogpb、paypb 等 21 个新文件）
+
+### 优化：好友缓存
+
+- 修复好友列表重复和导入失败问题
+- 导入 GID 时先调 `GetGameFriends` 验证有效性，无效 GID 不写入缓存
+- `fetchFriendsByGids` 使用正确的 `GetGameFriendsReply` 解码类型
+
+### 优化：成长任务
+
+- `ClientReportProgress` 自动推进可客户端上报的成长任务
+- 任务检查同时读取 `growth_tasks` 和 `tasks` 两个字段，修复 0/0 显示问题
+
+---
+
+## 技术栈
+
+**后端**
+
+[<img src="https://skillicons.dev/icons?i=nodejs" height="48" title="Node.js 20+" />](https://nodejs.org/)
+[<img src="https://skillicons.dev/icons?i=express" height="48" title="Express 4" />](https://expressjs.com/)
+[<img src="https://skillicons.dev/icons?i=socketio" height="48" title="Socket.io 4" />](https://socket.io/)
+
+**前端**
+
+[<img src="https://skillicons.dev/icons?i=vue" height="48" title="Vue 3" />](https://vuejs.org/)
+[<img src="https://skillicons.dev/icons?i=vite" height="48" title="Vite 7" />](https://vitejs.dev/)
+[<img src="https://skillicons.dev/icons?i=ts" height="48" title="TypeScript 5" />](https://www.typescriptlang.org/)
+[<img src="https://cdn.simpleicons.org/pinia/FFD859" height="48" title="Pinia 3" />](https://pinia.vuejs.org/)
+[<img src="https://skillicons.dev/icons?i=unocss" height="48" title="UnoCSS" />](https://unocss.dev/)
+
+**部署**
+
+[<img src="https://skillicons.dev/icons?i=docker" height="48" title="Docker Compose" />](https://docs.docker.com/compose/)
+[<img src="https://skillicons.dev/icons?i=pnpm" height="48" title="pnpm 10" />](https://pnpm.io/)
+[<img src="https://skillicons.dev/icons?i=githubactions" height="48" title="GitHub Actions" />](https://github.com/features/actions)
+
+---
+
+## 功能特性
+
+### 多账号管理
+- 账号新增、编辑、删除、启动、停止
+- 手动输入 Code
+- 账号被踢下线自动删除
+- 账号连续离线超时自动删除
+- 账号离线推送通知（支持 Bark、自定义 Webhook 等）
+
+### 自动化能力
+- 农场：收获、种植、浇水、除草、除虫、铲除、土地升级
+- 仓库：收获后自动出售果实
+- 好友：自动偷菜 / 帮忙 / 捣乱
+- 任务：自动检查并领取（含成长任务进度上报）
+- 好友黑名单：跳过指定好友
+- 静默时段：指定时间段内不执行好友操作
+
+### AI 成长任务规划（新增）
+- 自动识别未完成成长任务，调用大模型生成执行计划
+- 支持购买种子、种植收获、出售果实三种操作类型
+- 智能土地选择，保护变异/稀有/快成熟作物
+- 任务完成后自动触发下一轮规划
+
+### Web 面板
+- 概览 / 农场 / 背包 / 好友 / 分析 / 账号 / 设置页面
+- 实时日志，支持按账号、模块、事件、级别、关键词、时间范围筛选
+- AI 规划状态卡片（概览页右侧）
+- 深色 / 浅色主题切换
+
+### 分析页
+支持按以下维度排序作物：
+- 经验效率 / 普通肥经验效率
+- 净利润效率 / 普通肥净利润效率
+- 等级要求
+
+---
+
+## 环境要求
+
+- 源码运行：Node.js 20+，pnpm（推荐通过 `corepack enable` 启用）
+- 二进制发布版：无需安装 Node.js
+
+## 安装与启动（源码方式）
+
+### Windows
+
+```powershell
+# 1. 安装 Node.js 20+（https://nodejs.org/）并启用 pnpm
+node -v
+corepack enable
+pnpm -v
+
+# 2. 安装依赖并构建前端
+cd D:\Projects\qq-farm-bot-ui
+pnpm install
+pnpm build:web
+
+# 3. 启动
+pnpm dev:core
+
+# （可选）设置管理密码后启动
+$env:ADMIN_PASSWORD="你的强密码"
+pnpm dev:core
+```
+
+### Linux（Ubuntu/Debian）
+
+```bash
+# 1. 安装 Node.js 20+
+sudo apt update && sudo apt install -y curl
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+corepack enable
+
+# 2. 安装依赖并构建前端
+cd /path/to/qq-farm-bot-ui
+pnpm install
+pnpm build:web
+
+# 3. 启动
+pnpm dev:core
+
+# （可选）设置管理密码后启动
+ADMIN_PASSWORD='你的强密码' pnpm dev:core
+```
+
+启动后访问面板：
+- 本机：`http://localhost:3000`
+- 局域网：`http://<你的IP>:3000`
+
+---
+
+## Docker 部署
+
+```bash
+# 构建并后台启动
+docker compose up -d --build
+
+# 查看日志
+docker compose logs -f
+
+# 停止并移除容器
+docker compose down
+```
+
+### 数据持久化
+
+`docker-compose.yml` 已将数据目录挂载：
+
+| 宿主机路径 | 容器内路径 |
+|-----------|-----------|
+| `./data`  | `/app/core/data` |
+
+账号与配置数据保存在 `./data/accounts.json` 和 `./data/store.json`。
+
+### 设置管理密码
+
+在 `docker-compose.yml` 的 `environment` 中配置：
+
+```yaml
+environment:
+  ADMIN_PASSWORD: 你的强密码
+```
+
+修改后执行 `docker compose up -d` 重启生效。
+
+---
+
+## AI 任务规划配置
+
+在设置页「AI 任务规划」区块填写以下信息：
+
+| 字段 | 说明 |
+|------|------|
+| 模型提供商 | `claude`（Anthropic）/ `openai` / `custom`（自定义兼容接口） |
+| Base URL | API 地址，如 `https://api.anthropic.com` |
+| API Key | 对应平台的 API 密钥 |
+| 模型名称 | 如 `claude-opus-4-7`、`gpt-4o` |
+
+保存后启用开关，规划器每 30 分钟自动触发一次，也可点击「立即规划」手动触发。
+
+---
+
+## 二进制发布版（无需 Node.js）
+
+### 构建
+
+```bash
+pnpm install
+pnpm package:release
+```
+
+产物输出在 `dist/` 目录：
+
+| 平台 | 文件名 |
+|------|--------|
+| Windows x64 | `qq-farm-bot-win-x64.exe` |
+| Linux x64 | `qq-farm-bot-linux-x64` |
+| macOS Intel | `qq-farm-bot-macos-x64` |
+| macOS Apple Silicon | `qq-farm-bot-macos-arm64` |
+
+### 运行
+
+```bash
+# Windows：双击 exe 或在终端执行
+.\qq-farm-bot-win-x64.exe
+
+# Linux / macOS
+chmod +x ./qq-farm-bot-linux-x64 && ./qq-farm-bot-linux-x64
+```
+
+程序会在可执行文件同级目录自动创建 `data/` 并写入 `store.json`、`accounts.json`。
+
+---
+
+## 登录与安全
+
+- 面板首次访问需要登录
+- 默认管理密码：`admin`
+- **建议部署后立即修改为强密码**
+
+---
+
+## 项目结构
+
+```
+qq-farm-bot-ui/
+├── core/                  # 后端（Node.js 机器人引擎）
+│   ├── src/
+│   │   ├── config/        # 配置管理
+│   │   ├── controllers/   # HTTP API
+│   │   ├── gameConfig/    # 游戏静态数据
+│   │   ├── models/        # 数据模型与持久化
+│   │   ├── proto/         # Protobuf 协议定义（38 个文件）
+│   │   ├── runtime/       # 运行时引擎与 Worker 管理
+│   │   └── services/      # 业务逻辑（农场、好友、任务、AI 规划等）
+│   ├── data/              # 运行时数据（accounts.json、store.json）
+│   └── client.js          # 主进程入口
+├── web/                   # 前端（Vue 3 + Vite）
+│   ├── src/
+│   │   ├── api/           # API 客户端
+│   │   ├── components/    # Vue 组件
+│   │   ├── stores/        # Pinia 状态管理
+│   │   └── views/         # 页面视图
+│   └── dist/              # 构建产物
+├── docs/                  # 设计文档与实现计划
+├── docker-compose.yml
+├── pnpm-workspace.yaml
+└── package.json
+```
+
+---
+
+## 特别感谢
+
+- 原版项目：[Penty-d/qq-farm-bot-ui](https://github.com/Penty-d/qq-farm-bot-ui)
+- 核心功能：[linguo2625469/qq-farm-bot](https://github.com/linguo2625469/qq-farm-bot)
+- 部分功能：[QianChenJun/qq-farm-bot](https://github.com/QianChenJun/qq-farm-bot)
+
+## 免责声明
+
+本项目仅供学习与研究用途。使用本工具可能违反游戏服务条款，由此产生的一切后果由使用者自行承担。
+
+
+基于 Node.js 的 QQ 农场自动化工具，支持多账号管理、Web 控制面板、实时日志与数据分析。
+
 [Discord](https://discord.gg/zTEhed5qpc)
 
 ## 技术栈
