@@ -622,10 +622,23 @@ async function executeStep(step) {
         }
         case 'remove': {
             if (!step.landIds || step.landIds.length === 0) break;
-            await removePlant(step.landIds.map(Number));
-            log('ai-planner', `铲除完成，土地: ${step.landIds.join(',')}`, {
-                module: 'ai-planner', event: 'remove_done', landIds: step.landIds,
-            });
+            const successIds = [];
+            for (const id of step.landIds.map(Number)) {
+                try {
+                    await removePlant([id]);
+                    successIds.push(id);
+                } catch (e) {
+                    // 铲除次数上限或其他错误，跳过该土地
+                    logWarn('ai-planner', `土地#${id} 铲除失败: ${e.message}`, { module: 'ai-planner', event: 'remove_skip' });
+                }
+            }
+            if (successIds.length > 0) {
+                log('ai-planner', `铲除完成，土地: ${successIds.join(',')}`, {
+                    module: 'ai-planner', event: 'remove_done', landIds: successIds,
+                });
+            }
+            // 更新步骤的 landIds 为实际铲除成功的土地（后续种植只种这些）
+            step.landIds = successIds;
             break;
         }
         case 'wait': {
