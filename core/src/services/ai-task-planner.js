@@ -199,6 +199,14 @@ async function collectContext() {
         incompleteTasks = allTasksSnapshot.filter((t) =>
             t.isUnlocked && !t.isClaimed && t.totalProgress > 0 && t.progress < t.totalProgress
         );
+        // 已完成但未领取的任务，直接触发领取，不需要 AI 规划
+        const claimableTasks = allTasksSnapshot.filter((t) =>
+            t.isUnlocked && !t.isClaimed && t.totalProgress > 0 && t.progress >= t.totalProgress
+        );
+        if (claimableTasks.length > 0) {
+            log('ai-planner', `发现 ${claimableTasks.length} 个已完成待领取任务，直接领取`, { module: 'ai-planner', event: 'claim_ready' });
+            await checkAndClaimTasks(true);
+        }
     } catch {
         incompleteTasks = [];
         allTasksSnapshot = [];
@@ -239,7 +247,7 @@ const SYSTEM_PROMPT = `你是一个农场游戏任务规划器。根据当前状
 5. 优先选 status=empty 的土地；status=growing 且 canRemove=true 的土地也可以选（执行时会先铲除）
 6. 绝对不能选 canRemove=false 的土地（有变异/稀有种子/快成熟）
 7. condType=16/18（登录/互动）→ 跳过，无法主动推进
-8. 跳过无法主动推进的任务（升级/扩建/等级提升等）
+8. 跳过无法主动推进的任务：升级/扩建土地（bot自动处理）、等级提升等
 9. 输出严格的 JSON，不要解释
 
 示例1（购买任务）：
@@ -563,9 +571,28 @@ async function executeStep(step) {
     switch (step.type) {
         case 'harvest': {
             if (!step.landIds || step.landIds.length === 0) break;
-            await harvest(step.landIds.map(Number));
-            log('ai-planner', `收获完成，土地: ${step.landIds.join(',')}`, {
-                module: 'ai-planner', event: 'harvest_done', landIds: step.landIds,
+            // 收获前确认作物已成熟，未成熟的跳过（避免 code=1001021）
+            let harvestIds = step.landIds.map(Number);
+            try {
+                const landsReply = await getAllLands();
+                const currentLands = Array.isArray(landsReply && landsReply.lands) ? landsReply.lands : [];
+                const nowSec = getServerTimeSec();
+                const matureIds = new Set(
+                    currentLands.filter(l => {
+                        if (!l || !l.unlocked || !l.plant || !Array.isArray(l.plant.phases) || l.plant.phases.length === 0) return false;
+                        const matureTime = toNum(l.plant.mature_time);
+                        return matureTime === 0 || matureTime <= nowSec;
+                    }).map(l => toNum(l.id))
+                );
+                harvestIds = harvestIds.filter(id => matureIds.has(id));
+            } catch { /* 查询失败则尝试全部收获 */ }
+            if (harvestIds.length === 0) {
+                log('ai-planner', '目标土地尚未成熟，跳过本次收获', { module: 'ai-planner', event: 'harvest_skip' });
+                break;
+            }
+            await harvest(harvestIds);
+            log('ai-planner', `收获完成，土地: ${harvestIds.join(',')}`, {
+                module: 'ai-planner', event: 'harvest_done', landIds: harvestIds,
             });
             break;
         }
